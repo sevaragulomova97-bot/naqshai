@@ -4767,7 +4767,32 @@ async function _dlBlob(content, mime, filename, successMsg){
         const code = err && err.code;
         if(code === 'declined') return false;
         if(code === 'rejected_extension' || code === 'extension_not_enabled'){
-          ntf("Bu formatni shu ko'rishda yuklab bo'lmaydi — to'liq nashrda ishlaydi", 'err');
+          /* Claude'ning ko'rish oynasi faqat cheklangan ro'yxatdagi
+             kengaytmalarni saqlashga ruxsat beradi (png, jpg, txt, json,
+             md, svg, pdf...). Sanoat formatlari — TIFF, BMP, WIF, DXF —
+             bu ro'yxatda YO'Q. Bu ilovaning kamchiligi emas, ko'rish
+             oynasining cheklovi: haqiqiy saytda hammasi normal yuklanadi.
+             DXF va WIF — MATN fayllar, shuning uchun ularni .txt sifatida
+             saqlab berish mumkin: foydalanuvchi nomini o'zgartirsa bo'ldi. */
+          const ext = (filename.split('.').pop() || '').toLowerCase();
+          if(ext === 'dxf' || ext === 'wif'){
+            try{
+              await downloads.save({ filename: filename + '.txt', data: blob });
+              ntf('Ko\'rish oynasi .' + ext + ' ni saqlay olmaydi — fayl «' +
+                  filename + '.txt» nomi bilan saqlandi. Nomidagi oxirgi ' +
+                  '«.txt» ni o\'chiring, ichidagisi to\'liq to\'g\'ri.', 'ok');
+              return true;
+            }catch(e2){ if(e2 && e2.code === 'declined') return false; }
+          }
+          ntf('Bu formatni Claude ko\'rish oynasida saqlab bo\'lmaydi (faqat ' +
+              'png/jpg/txt/pdf kabi turlar mumkin). Sanoat fayllari uchun ' +
+              'ilovani o\'z saytingizdan oching — u yerda TIFF, BMP, WIF va ' +
+              'DXF normal yuklanadi.', 'err');
+          return false;
+        }
+        if(code === 'too_large'){
+          ntf('Fayl juda katta (16 MB dan ortiq) — kichikroq rapport yoki ' +
+              'past chuqurlik tanlang', 'err');
           return false;
         }
         ntf('Yuklab olishda xato: ' + (err && err.message || code || "noma'lum"), 'err');
