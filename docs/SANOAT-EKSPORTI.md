@@ -206,6 +206,29 @@ Mustaqil Python parserlari bilan:
 - **WIF ramka soni** murakkab naqshda 80–100 ga yetadi — bu faqat
   Jakkardda mumkin, oddiy ramkali dastgohda emas. Ilova buni xabar qiladi.
 
+## 3D va AR da naqsh taqsimoti
+
+3D buyum va AR sirtlarida naqsh **bir marta cho'zib emas, rapport sifatida
+takrorlanib** yotadi — tekstura eksportdagi aynan bir xil
+`makeSeamlessRepeat()` dan olinadi.
+
+**Takrorlanish soni buyum o'lchamidan hisoblanadi**, shuning uchun naqsh har
+buyumda bir xil fizik o'lchamda chiqadi (o'lchangan: plitka eni 0.575–0.651
+dunyo birligi, ya'ni ±6% ichida).
+
+Ikki qat'iy shart:
+
+1. **Aylanma yuzalarda `u` butun son bo'lishi shart** — aks holda buyum
+   orqasida ulanish chizig'i paydo bo'ladi. Barcha 28 holatda (7 buyum × 4
+   guruh) butun.
+2. **Naqsh cho'zilmasligi kerak.** `v` yo'nalishidagi uzunlik bbox
+   balandligidan emas, geometriyaning o'zidan o'lchanadi (profil/meridian
+   bo'ylab): piyolada profil 2.06, balandlik esa atigi 1.4 — bbox dan
+   hisoblansa naqsh ~60% cho'zilardi. Buzilish endi 14/14 holatda ±25% ichida.
+
+AR'da gilam va pol sirtlari ham chok-suz maydondan yig'iladi. Ilgari u yerda
+medalyon 3×3 qilib takrorlanar va plitkalar orasida uzilish ko'rinardi.
+
 ## Amaliy maslahat
 
 - **Rapport o'lchami** dastgoh imkoniyatiga qarab tanlanadi (256–2048 ilmoq).
