@@ -422,6 +422,17 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
 .seg button.sel{background:var(--grad-green);color:#f2e8cf;border-color:transparent;box-shadow:0 3px 10px rgba(15,95,75,.35)}
 .check-row{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
 .check-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+.prof{display:flex;gap:10px;align-items:center;padding:10px;margin-bottom:10px;
+  border:1px solid var(--line);border-radius:12px;background:var(--bg-soft)}
+.prof-av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:grid;place-items:center;
+  font:800 15px var(--f-disp);color:#fff;background:linear-gradient(135deg,#2f7a63,#c9a227)}
+.prof-i{min-width:0;flex:1}
+.prof-n{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-m{font-size:11.5px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-b{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;
+  font-size:10.5px;font-weight:700;border:1px solid var(--line)}
+.prof-b.cloud{background:#e8f3ee;color:#1d6b53;border-color:#bfe0d2}
+.prof-b.local{background:#f4efe2;color:#8a6b1f;border-color:#e2d5ac}
 .dim-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;
   font-size:13px;font-weight:600;color:var(--text-soft)}
 .dim-row label{display:flex;align-items:center;gap:6px}
@@ -581,6 +592,7 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
     <div class="acc open" id="acc-gal">
       <button class="acc-h">Saqlangan naqshlar <span class="chev">▾</span></button>
       <div class="acc-b"><div class="acc-inner">
+        <div id="profile-box"></div>
         <div class="gal-grid" id="gal-grid"></div>
         <div class="gal-empty" id="gal-empty">Hozircha saqlangan naqsh yo'q. «💾 Saqlash» tugmasini bosing.</div>
       </div></div>
@@ -4314,8 +4326,82 @@ function lsSet(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); return true; }
   catch(e){ return false; }
 }
+/* ===========================================================================
+   SAQLANGAN NAQSHLAR — BULUT (Supabase) yoki lokal
+   ---------------------------------------------------------------------------
+   Supabase rejimida va foydalanuvchi kirgan bo'lsa naqshlar `public.patterns`
+   jadvalida saqlanadi: shunda ular BOSHQA QURILMADA ham ochiladi. Aks holda
+   (server sozlanmagan yoki mehmon) — localStorage.
+
+   Xavfsizlik serverda: RLS siyosati `user_id = auth.uid() and is_active()`
+   shartini qo'yadi, ya'ni har kim faqat O'Z naqshlarini ko'radi va
+   o'zgartiradi; bloklangan foydalanuvchi esa hech narsa yoza olmaydi
+   (supabase/schema.sql). Mijozdagi tekshiruvlar faqat qulaylik uchun.
+
+   CLOUD.patterns — jadvalning xotiradagi nusxasi. Interfeys sinxron
+   getSavedList() ni chaqiradi, shuning uchun ro'yxat kirishda bir marta
+   yuklanadi va har o'zgarishdan keyin yangilanadi.
+   =========================================================================== */
+const CLOUD = { patterns:null, loading:false, err:'' };
+function cloudActive(){ return (typeof sbEnabled === 'function') && sbEnabled() && !!AUTH.user; }
+
+function cloudRowToItem(r){
+  return { id:r.id, p:r.params || {}, thumb:r.thumb || '', t:Date.parse(r.created_at) || Date.now() };
+}
+async function cloudLoadPatterns(){
+  if(!cloudActive()){ CLOUD.patterns = null; return; }
+  CLOUD.loading = true; CLOUD.err = '';
+  try{
+    const { data, error } = await AUTH.client
+      .from('patterns')
+      .select('id, params, thumb, created_at')
+      .order('created_at', { ascending:false })
+      .limit(200);
+    if(error) throw error;
+    CLOUD.patterns = (data || []).map(cloudRowToItem);
+  }catch(e){
+    console.error('[cloud] load', e);
+    CLOUD.err = (e && e.message) || 'yuklab bo\'lmadi';
+    CLOUD.patterns = CLOUD.patterns || [];
+  }
+  CLOUD.loading = false;
+}
+async function cloudSavePattern(item){
+  const { data, error } = await AUTH.client
+    .from('patterns')
+    .insert({ user_id: AUTH.user.id, name: (item.p && item.p.type) || null,
+              params: item.p, thumb: item.thumb })
+    .select('id, params, thumb, created_at')
+    .single();
+  if(error) throw error;
+  CLOUD.patterns = CLOUD.patterns || [];
+  CLOUD.patterns.unshift(cloudRowToItem(data));
+  return true;
+}
+async function cloudDeletePattern(id){
+  const { error } = await AUTH.client.from('patterns').delete().eq('id', id);
+  if(error) throw error;
+  CLOUD.patterns = (CLOUD.patterns || []).filter(x=>x.id !== id);
+  return true;
+}
+/* Mehmon sifatida yasalgan naqshlar kirishda YO'QOLMASIN — bir marta
+   bulutga ko'chiriladi va lokal ro'yxat tozalanadi. */
+async function cloudMigrateGuest(){
+  if(!cloudActive()) return 0;
+  let guest = [];
+  try{ guest = lsGet('naqsh_saved', []) || []; }catch(e){}
+  if(!guest.length) return 0;
+  let n = 0;
+  for(const it of guest.slice(0, 48)){
+    try{ await cloudSavePattern(it); n++; }catch(e){ console.error('[cloud] migrate', e); break; }
+  }
+  if(n){ try{ localStorage.removeItem('naqsh_saved'); }catch(e){} }
+  return n;
+}
+
 /* Saqlangan naqshlar: kirgan foydalanuvchining hisobida, aks holda mehmon ro'yxatida */
 function getSavedList(){
+  if(cloudActive()) return CLOUD.patterns || [];
   const u = (typeof currentUser==='function') ? currentUser() : null;
   if(u){ const users = usersGet(); return (users[u.login] && users[u.login].patterns) || []; }
   return lsGet('naqsh_saved', []);
@@ -4327,6 +4413,39 @@ function setSavedList(arr){
     if(users[u.login]){ users[u.login].patterns = arr; return usersSet(users); }
   }
   return lsSet('naqsh_saved', arr);
+}
+/* Yon paneldagi PROFIL KARTASI — kim kirgan va naqshlar qayerda saqlanmoqda.
+   Nomi renderProfileCard: pastda profil OYNASI uchun renderProfile() bor va
+   ikkinchi e'lon birinchisini bosib ketardi (funksiya deklaratsiyasi
+   ko'tariladi) — shu sababli karta umuman chizilmasdi. */
+function renderProfileCard(){
+  const box = $('profile-box');
+  if(!box) return;
+  const u = (typeof currentUser === 'function') ? currentUser() : null;
+  if(!u){
+    box.innerHTML = '<div class="prof"><div class="prof-av">?</div><div class="prof-i">' +
+      '<div class="prof-n">Mehmon</div>' +
+      '<div class="prof-m">Naqshlar faqat shu brauzerda saqlanadi</div>' +
+      '<span class="prof-b local">lokal</span></div></div>';
+    return;
+  }
+  const cloud = cloudActive();
+  const initials = (u.name || u.login || '?').trim().charAt(0).toUpperCase();
+  const prov = u.provider === 'google' ? 'Google' : 'Email';
+  const n = getSavedList().length;
+  const since = u.created ? new Date(u.created).toLocaleDateString('uz-UZ') : '';
+  box.innerHTML =
+    '<div class="prof">' +
+      '<div class="prof-av">' + escHTML(initials) + '</div>' +
+      '<div class="prof-i">' +
+        '<div class="prof-n">' + escHTML(u.name || u.login) + '</div>' +
+        '<div class="prof-m">' + escHTML(u.login) + ' · ' + prov +
+          (since ? ' · ' + escHTML(since) : '') + '</div>' +
+        '<span class="prof-b ' + (cloud ? 'cloud' : 'local') + '">' +
+          (cloud ? '☁️ hisobda saqlanadi' : 'shu qurilmada') +
+        '</span> <span class="prof-b">' + n + ' ta naqsh</span>' +
+      '</div>' +
+    '</div>';
 }
 function renderGallery(){
   const grid = $('gal-grid'), empty = $('gal-empty');
@@ -4348,6 +4467,15 @@ function renderGallery(){
     del.setAttribute('aria-label','O\'chirish');
     del.addEventListener('click', (e)=>{
       e.stopPropagation();
+      if(cloudActive() && item.id !== undefined){
+        cloudDeletePattern(item.id)
+          .then(()=>{ renderGallery(); ntf('Naqsh o\'chirildi', 'ok'); })
+          .catch(err=>{
+            console.error('[cloud] delete', err);
+            ntf('O\'chirib bo\'lmadi: ' + ((err && err.message) || 'noma\'lum'), 'err');
+          });
+        return;
+      }
       const arr = getSavedList();
       arr.splice(idx,1);
       setSavedList(arr);
@@ -4363,6 +4491,7 @@ function renderGallery(){
     });
     grid.appendChild(d);
   });
+  renderProfileCard();
 }
 function saveCurrent(){
   const off = document.createElement('canvas');
@@ -4374,9 +4503,19 @@ function saveCurrent(){
     octx.fillRect(0,0,144,144);
     drawPattern(octx, 72, 72, 66, P);
   }
-  const arr = getSavedList();
   const snap = {...P}; delete snap._bg;
-  arr.unshift({p:snap, thumb: off.toDataURL('image/png'), t:Date.now()});
+  const item = { p:snap, thumb: off.toDataURL('image/png'), t:Date.now() };
+  if(cloudActive()){
+    cloudSavePattern(item)
+      .then(()=>{ renderGallery(); ntf('Naqsh hisobingizga saqlandi ☁️', 'ok'); })
+      .catch(e=>{
+        console.error('[cloud] save', e);
+        ntf('Bulutga saqlab bo\'lmadi: ' + ((e && e.message) || 'noma\'lum'), 'err');
+      });
+    return;
+  }
+  const arr = getSavedList();
+  arr.unshift(item);
   if(arr.length > 48) arr.length = 48;
   if(setSavedList(arr)){
     renderGallery();
@@ -8487,11 +8626,22 @@ async function authBootstrap(){
       AUTH.mode = 'supabase';
       const { data } = await AUTH.client.auth.getSession();
       AUTH.user = data && data.session ? data.session.user : null;
-      if(AUTH.user){ await authLoadProfile(); await authEnforceStatus(); }
+      if(AUTH.user){ await authLoadProfile(); await authEnforceStatus(); await cloudLoadPatterns(); }
       AUTH.client.auth.onAuthStateChange(async (evt, session)=>{
+        const wasUser = AUTH.user;
         AUTH.user = session ? session.user : null;
-        if(AUTH.user) await authLoadProfile(); else AUTH.profile = null;
-        updateUserBtn(); renderGallery();
+        if(AUTH.user){
+          await authLoadProfile();
+          /* yangi kirish bo'lsa — mehmon naqshlarini ko'chiramiz, so'ng yuklaymiz */
+          if(!wasUser){
+            const moved = await cloudMigrateGuest();
+            if(moved) ntf(moved + ' ta naqsh hisobingizga ko\'chirildi ☁️', 'ok');
+          }
+          await cloudLoadPatterns();
+        } else {
+          AUTH.profile = null; CLOUD.patterns = null;
+        }
+        updateUserBtn(); renderGallery(); renderProfileCard();
         if(evt === 'PASSWORD_RECOVERY') openNewPassword();
       });
     }catch(e){
@@ -8913,10 +9063,16 @@ function renderProfile(){
   const pats = getSavedList();
   const d = new Date(u.created);
   const dateStr = d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
+  const cloud = (typeof cloudActive === 'function') && cloudActive();
   let html = '<div class="prof-row"><span>Ism</span><b>'+escHTML(u.name)+'</b></div>' +
     '<div class="prof-row"><span>Email</span><b>'+escHTML(u.login)+'</b></div>' +
+    '<div class="prof-row"><span>Ro\'yxatdan o\'tish usuli</span><b>' +
+      (u.provider === 'google' ? 'Google' : 'Email va parol') + '</b></div>' +
     '<div class="prof-row"><span>A\'zo bo\'lgan sana</span><b>'+dateStr+'</b></div>' +
-    '<div class="prof-row"><span>Yaratilgan naqshlar</span><b>'+pats.length+' ta</b></div>';
+    '<div class="prof-row"><span>Yaratilgan naqshlar</span><b>'+pats.length+' ta</b></div>' +
+    '<div class="prof-row"><span>Naqshlar qayerda</span><b>' +
+      (cloud ? '☁️ Hisobingizda — boshqa qurilmada ham ochiladi'
+             : '📱 Faqat shu qurilmada') + '</b></div>';
   html += '<div class="prof-sec"><h4>Mening naqshlarim</h4><div class="gal-grid" id="prof-gal">';
   html += '</div>' + (pats.length ? '' : '<div class="gal-empty">Studio da «💾 Saqlash» bosing — naqshlar shu yerda to\'planadi.</div>') + '</div>';
   html += '<div class="prof-sec"><h4>Sozlamalar — parolni o\'zgartirish</h4>' +

@@ -163,3 +163,42 @@ Faqat ikkita ochiq qiymat kerak (yuqoridagi 2-bo'limga qarang):
 | `SUPABASE_ANON_KEY` | yo'q | `index.html` yoki ilova sozlamalari |
 | `service_role` kaliti | **HA** | Faqat Supabase Dashboard'da qoladi |
 | Google Client Secret | **HA** | Faqat Supabase Dashboard'da qoladi |
+
+## Naqshlar hisobda saqlanishi
+
+Supabase ulanganda va foydalanuvchi kirgan bo'lsa, saqlangan naqshlar
+`public.patterns` jadvaliga yoziladi — ya'ni ular **boshqa qurilmada ham**
+ochiladi. Server sozlanmagan yoki mehmon bo'lsa — faqat shu brauzerda
+(`localStorage`).
+
+| Holat | Naqshlar qayerda |
+|---|---|
+| Mehmon | shu brauzerda |
+| Lokal rejim (server sozlanmagan) | shu brauzerda |
+| Supabase + kirgan | **hisobda (bulutda)** |
+
+Yon paneldagi profil kartasi va profil oynasi buni ochiq yozib turadi,
+shuning uchun foydalanuvchi naqshlari qayerda ekanini har doim biladi.
+
+**Mehmon naqshlari yo'qolmaydi:** birinchi marta kirganda ular avtomatik
+hisobga ko'chiriladi va lokal ro'yxat tozalanadi.
+
+Xavfsizlik serverda: RLS siyosati
+`user_id = auth.uid() and public.is_active()` shartini qo'yadi — har kim
+faqat o'z naqshlarini ko'radi va o'zgartiradi, bloklangan foydalanuvchi
+esa hech narsa yoza olmaydi. Mijozdagi tekshiruvlar faqat qulaylik uchun.
+
+### Tekshirilgan oqim
+
+Supabase REST/Auth protokolini taqlid qiluvchi mahalliy server bilan
+uchdan-uchgacha sinaldi:
+
+- email orqali ro'yxatdan o'tish → hisobga kirish
+- mehmonning 2 ta naqshi hisobga ko'chirildi, lokal ro'yxat tozalandi
+- naqsh saqlash → jadvalga yozildi (3 ta), o'chirish → 2 ta qoldi
+- Google tugmasi `signInWithOAuth({provider:'google'})` ni to'g'ri
+  `redirectTo` bilan chaqiradi
+- **boshqa brauzer kontekstida** (yangi "qurilma") kirishdan oldin 0 ta
+  naqsh, kirgandan keyin 2 tasi bulutdan yuklandi
+- 0 JS xato
+
