@@ -24,9 +24,17 @@ Simmetriya, murakkablik, chiziq qalinligi, zichlik, qatlamlar va boshqa
 parametrlar jonli sozlanadi. Tessellatsiya rejimi 4 devor guruhini qo'llab-quvvatlaydi
 (`p4` · `p4m` · `p6` · `p6m`).
 
-**🧊 3D** — naqshni haqiqiy buyumda ko'rish: lagan, piyola, kosa, tuvak,
-stakan, panel, shar. 4 yoritish rejimi, avto-aylanish, jonli chizilish
-animatsiyasi, foto ramka va suvenir matni.
+**🧊 3D** — naqshni haqiqiy buyumda ko'rish.
+
+*Idishlar:* lagan, piyola, kosa, tuvak, stakan, panel, shar.
+
+*Me'moriy ob'yektlar:* **ustun** (o'yma yog'och, muqarnas boshi bilan),
+**darvoza** (koshin ramka, siniq ravoq, ikki tabaqali o'yma eshik),
+**peshtoq** (Registon uslubidagi ayvon — hoshiya, archivolt, muqarnas,
+guldasta ustunlar). Naqsh yuzalar bo'ylab **chok-suz** takrorlanadi.
+
+4 yoritish rejimi, avto-aylanish, jonli chizilish animatsiyasi, foto ramka
+va suvenir matni.
 
 **⬡ AR** — naqshni devor, piyola, pol yoki gilam ustida ko'rish.
 Kamera bo'lmasa **simulyatsiya rejimi** ishlaydi.
@@ -42,12 +50,15 @@ manba kodi.
 
 | Format | Maqsad |
 |---|---|
-| **PNG** | 1024 / 2048 / 4096 px, shaffof fon imkoni |
+| **PNG** | ixtiyoriy piksel o'lchami, shaffof fon imkoni |
 | **SVG** | Vektor — CorelDraw, Illustrator, lazer kesish |
-| **DXF** | AutoCAD 2000, mm o'lchamida, yopiq konturlar — CNC / lazer |
+| **DXF** | AutoCAD 2000, mm o'lchamida — CNC / lazer |
 | **TIFF** | 1 / 8 / 24-bit — sanoat Jakkard CAD tizimlari |
 | **BMP** | 1 / 24-bit — Jakkard boshqaruv dasturlari |
 | **WIF** | To'quv drafti (ramka / pedal / tie-up) |
+
+Eni va bo'yi alohida kiritiladi (kvadrat bo'lishi shart emas), naqsh esa
+**butun yuzani to'ldiradi** yoki markazda **medalyon** bo'lib turadi.
 
 Jakkard formatlari **chok-suz rapport** sifatida chiqadi: kanvas o'lchami
 naqsh panjarasining aniq davriga teng olinadi, shuning uchun mato bo'ylab

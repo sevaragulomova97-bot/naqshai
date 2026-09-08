@@ -610,6 +610,9 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
       <option value="stakan">Stakan</option>
       <option value="panel">Panel</option>
       <option value="shar">Shar</option>
+      <option value="ustun">🏛 Ustun (o'yma)</option>
+      <option value="darvoza">🚪 Darvoza</option>
+      <option value="peshtoq">🕌 Peshtoq (ayvon)</option>
     </select>
     <select class="mini-select" id="sel-light">
       <option value="warm">Iliq yorug'lik</option>
@@ -5755,6 +5758,425 @@ function planarUV(geo){
   uv.needsUpdate = true;
   return geo;
 }
+/* ===========================================================================
+   ME'MORIY OB'YEKTLAR — ustun, darvoza, peshtoq
+   ---------------------------------------------------------------------------
+   Bular bitta mesh emas, ko'p qismli guruh: har qism o'z materiali va o'z
+   naqsh zichligi bilan chiqadi. Naqsh yuzalar bo'ylab CHOK-SUZ takrorlanadi —
+   tekstura makeSeamlessRepeat() rapportidan olinadi va RepeatWrapping bilan
+   qo'yiladi, shuning uchun ustun tanasida ham, peshtoq yuzasida ham
+   takrorlanish chizig'i ko'rinmaydi.
+
+   NAQSH ZICHLIGI. UV diapazoni geometriya turiga qarab har xil (o'lchangan):
+     Extrude / Shape geometriya → UV = DUNYO koordinatasi (birlikda)
+     Box / Cylinder / Lathe / Plane → UV = 0..1
+     stripFromOutline → UV = (yoy uzunligi, chuqurlik), ya'ni birlikda
+   Shuning uchun birinchi guruhda repeat = 1/plitka_o'lchami (birlikda),
+   ikkinchisida esa repeat = plitkalar SONI. Quyida TU (tile unit) — birlikdagi
+   plitka o'lchami; har joyda shundan hisoblanadi.
+
+   O'LCHOV TIZIMI. Har ob'yekt asosi LOKAL y=0 da quriladi va guruh
+   FLOOR_Y ga qo'yiladi — shunda buyum polda turadi, havoda osilmaydi.
+   =========================================================================== */
+const ARCH_KINDS = {ustun:1, darvoza:1, peshtoq:1};
+const FLOOR_Y = -1.66;          /* sahnadagi pol balandligi */
+const TU = 1.35;                /* naqsh plitkasining me'moriy o'lchami */
+
+/* Me'moriy qism uchun material.
+   kind: 'tile' | 'wood' | 'stone' | 'metal' | 'dark'
+   rx, ry — takrorlanish (yuqoridagi izohga qarang)
+   tint — naqshni bo'yash (masalan hoshiya uchun to'q ko'k) */
+function archMat(kind, rx, ry, tint){
+  let m;
+  if(kind === 'stone'){
+    m = new THREE.MeshStandardMaterial({color:0xd6c7a4, roughness:0.86, metalness:0.02});
+  } else if(kind === 'metal'){
+    m = new THREE.MeshStandardMaterial({color:0xa87c34, roughness:0.34, metalness:0.9});
+  } else if(kind === 'dark'){
+    m = new THREE.MeshStandardMaterial({color:0x2a1d10, roughness:0.85, metalness:0.05});
+  } else if(kind === 'wood'){
+    m = T3.matWood.clone();
+  } else {
+    m = T3.mat.clone();
+  }
+  m.side = THREE.FrontSide;
+  if(kind === 'tile' || kind === 'wood'){
+    if(tint !== undefined){
+      m.color = new THREE.Color(tint);
+      /* emissive tusni ham o'zgartiramiz, lekin kuchini pasaytiramiz:
+         aks holda to'q ko'k hoshiya yoki ayvon ichi "porlab" ketadi va
+         chuqurlik sezilmay qoladi. */
+      if(m.emissive){ m.emissive = new THREE.Color(tint); m.emissiveIntensity = 0.05; }
+    }
+    m.userData.rep = [rx || 1, (ry === undefined ? rx : ry) || 1];
+    T3.archMats.push(m);
+  }
+  return m;
+}
+
+/* TO'RT MARKAZLI (Temuriylar) SINIQ RAVOQ konturi.
+   Chap yarim yoyning markazi springline ustida (cx, spring) da yotadi va yoy
+   (-hw, spring) dan cho'qqi (0, apex) gacha boradi. Ikkalasi bitta aylanada
+   bo'lishi shartidan:  (cx + hw)² = cx² + rise²  →  cx = (rise² − hw²)/(2·hw).
+   Bu Registon va Bibixonim peshtoqlaridagi ravoq shakli. */
+function archOutline(hw, spring, apex, n){
+  n = n || 48;
+  const rise = apex - spring;
+  const cx = (rise*rise - hw*hw)/(2*hw);
+  const R = cx + hw;
+  const aEnd = Math.atan2(rise, -cx);
+  const pts = [];
+  for(let i = 0; i <= n; i++){
+    const a = Math.PI + (aEnd - Math.PI)*(i/n);
+    pts.push([cx + R*Math.cos(a), spring + R*Math.sin(a)]);
+  }
+  for(let i = n - 1; i >= 0; i--){
+    const a = Math.PI + (aEnd - Math.PI)*(i/n);
+    pts.push([-(cx + R*Math.cos(a)), spring + R*Math.sin(a)]);
+  }
+  return pts;
+}
+
+/* Kontur bo'ylab "tunnel" yuzasi (ravoq ichki yuzasi — soffit).
+   UV: u — yoy uzunligi, v — chuqurlik; shuning uchun naqsh cho'zilmaydi. */
+function stripFromOutline(pts, depth){
+  const g = new THREE.BufferGeometry();
+  const n = pts.length;
+  const pos = [], uv = [], idx = [];
+  let len = 0; const s = [0];
+  for(let i = 1; i < n; i++){
+    len += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    s.push(len);
+  }
+  for(let i = 0; i < n; i++){
+    pos.push(pts[i][0], pts[i][1], 0);
+    pos.push(pts[i][0], pts[i][1], -depth);
+    uv.push(s[i], 0, s[i], depth);
+  }
+  for(let i = 0; i < n - 1; i++){
+    const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+    idx.push(a, b, c, b, d, c);
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/* MUQARNAS — ustun boshi uchun: aylana bo'ylab yaruslar, yuqoriga qarab
+   radius va kataklar soni ortadi (stalaktit effekti). */
+function muqarnasCap(r0, tiers, height, mat){
+  const grp = new THREE.Group();
+  let r = r0, y = 0;
+  const hT = height/tiers;
+  for(let t = 0; t < tiers; t++){
+    const n = 10 + t*5;
+    const w = (TAU*r/n)*0.86;
+    for(let i = 0; i < n; i++){
+      const a = TAU*(i + 0.5)/n + (t % 2 ? Math.PI/n : 0);
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(w, hT*0.94, hT*0.85), mat);
+      cell.position.set(Math.sin(a)*r, y + hT/2, Math.cos(a)*r);
+      cell.rotation.y = a;
+      cell.rotation.x = -0.16;
+      grp.add(cell);
+    }
+    r += hT*0.5; y += hT;
+  }
+  return grp;
+}
+
+/* MUQARNAS — ayvon ravoq boshi uchun: kataklar RAVOQ EGRISI bo'ylab
+   teriladi va har yarus oldinga chiqadi, ya'ni yarim gumbaz ichini
+   to'ldiradi. (Aylana bo'ylab terilgan variant bu yerda noto'g'ri —
+   old tomondan qirradan ko'rinib qoladi.) */
+function muqarnasArch(hw, spring, apex, tiers, z0, dz, mat){
+  const grp = new THREE.Group();
+  for(let t = 0; t < tiers; t++){
+    const k = 1 - t*0.15;                       /* yuqori yaruslar kichikroq */
+    const pts = archOutline(hw*k, spring, spring + (apex - spring)*k, 20);
+    const step = Math.max(2, Math.floor(pts.length/(9 + t*2)));
+    const sz = 0.085*k + 0.03;
+    for(let i = step; i < pts.length - step; i += step){
+      const q = pts[i];
+      const prev = pts[i-1], next = pts[i+1];
+      const ang = Math.atan2(next[1]-prev[1], next[0]-prev[0]);
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(sz*1.5, sz, sz*0.9), mat);
+      cell.position.set(q[0], q[1], z0 + t*dz);
+      cell.rotation.z = ang;
+      grp.add(cell);
+    }
+  }
+  return grp;
+}
+
+/* ARCHIVOLT — ravoq atrofidagi bo'rtma band (peshtoqning eng tanish
+   detali). Tashqi kontur ichkisidan bw ga kengroq, shuning uchun ikkisi
+   orasida bir tekis enli halqa hosil bo'ladi. */
+function archBandShape(ow, spring, apex, bw){
+  const outer = archOutline(ow + bw, spring, apex + bw, 44);
+  const inner = archOutline(ow, spring, apex, 44);
+  const sh = new THREE.Shape();
+  sh.moveTo(-(ow + bw), 0);
+  for(const q of outer) sh.lineTo(q[0], q[1]);
+  sh.lineTo(ow + bw, 0);
+  sh.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-ow, 0);
+  for(const q of inner) hole.lineTo(q[0], q[1]);
+  hole.lineTo(ow, 0);
+  hole.closePath();
+  sh.holes.push(hole);
+  return sh;
+}
+
+/* --------------------------------------------------------------- USTUN
+   Xiva Juma masjidi uslubidagi o'yma yog'och ustun:
+   tosh poya → kuza (vazasimon asos) → entazisli tana → muqarnas boshi →
+   yostiq. Asos lokal y = 0 da. */
+function buildUstun(){
+  const g = new THREE.Group();
+  const R = 0.30, Hs = 2.40;
+
+  const poya = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.26, 0.98), archMat('stone'));
+  poya.position.y = 0.13; g.add(poya);
+
+  const kuza = new THREE.Mesh(
+    latheFromProfile([[0.26,0],[0.42,0.06],[0.47,0.17],[0.41,0.29],[0.32,0.40],[0.30,0.46]], 1),
+    archMat('wood', 4, 1));
+  kuza.position.y = 0.26; g.add(kuza);
+
+  /* tana — yengil entazis (o'rtasi biroz to'la); naqsh aylana bo'ylab 3,
+     balandligi bo'ylab 6 marta (UV 0..1 → repeat = plitkalar soni) */
+  const prof = [];
+  for(let i = 0; i <= 16; i++){
+    const t = i/16;
+    prof.push([R*(1 - 0.13*t + 0.05*Math.sin(Math.PI*t)), t*Hs]);
+  }
+  const tana = new THREE.Mesh(latheFromProfile(prof, 1), archMat('wood', 3, 6));
+  tana.position.y = 0.72; g.add(tana);
+
+  for(const y of [0.80, 1.90, 3.00]){
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R*0.99, 0.032, 10, 48), archMat('metal'));
+    ring.rotation.x = Math.PI/2; ring.position.y = y; g.add(ring);
+  }
+
+  const cap = muqarnasCap(R*0.9, 4, 0.50, archMat('wood', 1, 1));
+  cap.position.y = 3.12; g.add(cap);
+
+  const yostiq = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.16, 0.32), archMat('wood', 2, 1));
+  yostiq.position.y = 3.70; g.add(yostiq);
+  const bosh = new THREE.Mesh(new THREE.BoxGeometry(1.10, 0.14, 0.42), archMat('stone'));
+  bosh.position.y = 3.86; g.add(bosh);
+
+  g.userData.h = 3.93;
+  return g;
+}
+
+/* ------------------------------------------------------------- DARVOZA
+   Koshin ramkadagi ikki tabaqali o'yma yog'och darvoza: siniq ravoqli
+   timpan, panelli tabaqalar, bronza mixlar va halqa tutqichlar. */
+function buildDarvoza(){
+  const g = new THREE.Group();
+  const W = 3.0, H = 4.0, D = 0.34;
+  const ow = 1.02, oh = 2.30;
+  /* Ravoq SINIQ bo'lishi uchun ko'tarilish yarim endan katta bo'lishi shart
+     (rise > hw). Avvalgi qiymatlarda rise = 0.93 < hw = 1.02 edi va ravoq
+     yumaloq chiqib qolgandi — Temuriylar shakli emas. */
+  const apexY = H - 0.30;                       /* rise = 1.40 > ow = 1.02 */
+  const ap = archOutline(ow, oh, apexY, 40);
+  const opening = new THREE.Path();
+  opening.moveTo(-ow, 0);
+  for(const q of ap) opening.lineTo(q[0], q[1]);
+  opening.lineTo(ow, 0);
+  opening.closePath();
+
+  const sh = new THREE.Shape();
+  sh.moveTo(-W/2, 0); sh.lineTo(W/2, 0); sh.lineTo(W/2, H); sh.lineTo(-W/2, H); sh.closePath();
+  sh.holes.push(opening);
+  /* Ramka TO'Q KO'K koshin: timpan va tabaqalar bilan bir xil rangda bo'lsa
+     ravoq umuman ko'rinmay qoladi — birinchi variantda aynan shunday edi. */
+  const frame = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(sh, {depth:D, bevelEnabled:false, curveSegments:24}),
+    archMat('tile', 1/TU, 1/TU, 0x24518f));
+  frame.position.z = -D; g.add(frame);
+
+  /* ravoq atrofidagi bo'rtma band — oltin tusda */
+  const archv = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archBandShape(ow, oh, apexY, 0.17),
+                              {depth:0.06, bevelEnabled:false, curveSegments:20}),
+    archMat('tile', 1/0.30, 1/0.30, 0xc99b3f));
+  archv.position.z = 0.004; g.add(archv);
+
+  /* ravoq ichki yuzasi — ichkariga yorug'lik kam tushadi */
+  const soffit = new THREE.Mesh(stripFromOutline(ap, D + 0.1),
+                                archMat('tile', 1/TU, 1/TU, 0x8d96a4));
+  soffit.material.side = THREE.DoubleSide;
+  g.add(soffit);
+
+  /* timpan — ravoq ostidagi maydon (eshik tepasida), och feruza */
+  const tsh = new THREE.Shape();
+  tsh.moveTo(-ow, oh);
+  for(const q of ap) tsh.lineTo(q[0], q[1]);
+  tsh.closePath();
+  const timpan = new THREE.Mesh(new THREE.ShapeGeometry(tsh, 24),
+                                archMat('tile', 1/(TU*0.5), 1/(TU*0.5), 0x7fc7c0));
+  timpan.position.z = -0.10; g.add(timpan);
+
+  /* ikki tabaqa */
+  const lw = ow - 0.02, lh = oh;
+  for(const sgn of [-1, 1]){
+    /* tabaqa ramkadan ICHKARIDA turadi — shunda eshik "o'rnatilgan"
+       ko'rinadi, yuzaga yopishtirilgandek emas */
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(lw, lh, 0.07),
+                                archMat('wood', 2, 4, 0x8a4f22));
+    leaf.position.set(sgn*lw/2, lh/2, -0.16); g.add(leaf);
+    for(let r = 0; r < 3; r++){
+      /* panel ramkasi (to'q) + panel yuzasi (och) — o'ymakorlik chegarasi */
+      const brd = new THREE.Mesh(new THREE.BoxGeometry(lw*0.78, lh*0.26, 0.03),
+                                 archMat('dark'));
+      brd.position.set(sgn*lw/2, lh*(0.19 + r*0.28), -0.12); g.add(brd);
+      const pnl = new THREE.Mesh(new THREE.BoxGeometry(lw*0.68, lh*0.21, 0.035),
+                                 archMat('wood', 1, 1, 0xc98a45));
+      pnl.position.set(sgn*lw/2, lh*(0.19 + r*0.28), -0.10); g.add(pnl);
+    }
+    const stud = archMat('metal');
+    for(let c = 0; c < 3; c++){
+      for(let r = 0; r < 7; r++){
+        const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), stud);
+        s2.position.set(sgn*(0.12 + c*0.33), 0.2 + r*0.32, -0.115); g.add(s2);
+      }
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.02, 10, 28), archMat('metal'));
+    ring.position.set(sgn*0.28, 1.30, -0.10); g.add(ring);
+  }
+
+  const ostona = new THREE.Mesh(new THREE.BoxGeometry(W + 0.3, 0.14, D + 0.4), archMat('stone'));
+  ostona.position.set(0, 0.07, -D/2); g.add(ostona);
+  g.userData.h = H;
+  return g;
+}
+
+/* ------------------------------------------------------------- PESHTOQ
+   Registon uslubidagi darvozaxona: koshin bilan qoplangan to'rtburchak
+   yuza, ichida siniq ravoqli chuqur ayvon, to'q ko'k hoshiya (kitoba)
+   ramkasi, ravoq boshida muqarnas, burchaklarda guldasta ustunlar. */
+function buildPeshtoq(){
+  const g = new THREE.Group();
+  const W = 4.0, H = 5.0, D = 0.42;
+  const ow = 1.15, spring = 2.05, apex = 3.95;
+  const nicheD = 1.20;
+  const band = 0.40;
+
+  const ap = archOutline(ow, spring, apex, 44);
+  const opening = new THREE.Path();
+  opening.moveTo(-ow, 0);
+  for(const q of ap) opening.lineTo(q[0], q[1]);
+  opening.lineTo(ow, 0);
+  opening.closePath();
+
+  /* 1) asosiy koshin yuzasi (hoshiyadan ichkarida) */
+  const iw = W/2 - band, ih = H - band;
+  const inner = new THREE.Shape();
+  inner.moveTo(-iw, 0); inner.lineTo(iw, 0); inner.lineTo(iw, ih); inner.lineTo(-iw, ih); inner.closePath();
+  inner.holes.push(opening);
+  const face = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(inner, {depth:D, bevelEnabled:false, curveSegments:24}),
+    archMat('tile', 1/TU, 1/TU));
+  face.position.z = -D; g.add(face);
+
+  /* 2) HOSHIYA (kitoba) — yuzadan bo'rtib turadi, to'q ko'k tusda:
+     Registon peshtoqlarida yozuvli hoshiya aynan shunday ajralib turadi */
+  const outer = new THREE.Shape();
+  outer.moveTo(-W/2, 0); outer.lineTo(W/2, 0); outer.lineTo(W/2, H); outer.lineTo(-W/2, H); outer.closePath();
+  const cut = new THREE.Path();
+  cut.moveTo(-iw, 0); cut.lineTo(iw, 0); cut.lineTo(iw, ih); cut.lineTo(-iw, ih); cut.closePath();
+  outer.holes.push(cut);
+  const hoshiya = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(outer, {depth:D + 0.10, bevelEnabled:false}),
+    archMat('tile', 1/(band*0.92), 1/(band*0.92), 0x24518f));
+  hoshiya.position.z = -D; g.add(hoshiya);
+
+  /* 3) ARCHIVOLT — ravoq atrofidagi bo'rtma band */
+  const archv = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archBandShape(ow, spring, apex, 0.24),
+                              {depth:0.07, bevelEnabled:false, curveSegments:20}),
+    archMat('tile', 1/0.40, 1/0.40, 0x24518f));
+  archv.position.z = 0.005; g.add(archv);
+
+  /* 4) ayvon ichki yuzalari.
+     Ichkariga yorug'lik kam tushadi — shuning uchun bu yuzalar ko'kimtir-kul
+     tusda bo'yaladi. Aks holda ichki devor tashqi yuza bilan bir xil yorug'
+     chiqadi va ayvon CHUQURLIGI umuman sezilmaydi — birinchi variantda aynan
+     shu muammo bor edi, bino yassi plita bo'lib ko'rinardi. */
+  const INNER = 0x93a3b8;
+  const soffit = new THREE.Mesh(stripFromOutline(ap, nicheD),
+                                archMat('tile', 1/TU, 1/TU, INNER));
+  soffit.material.side = THREE.DoubleSide;
+  soffit.position.z = -D; g.add(soffit);
+
+  for(const sgn of [-1, 1]){
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(nicheD, spring),
+                                archMat('tile', nicheD/TU, spring/TU, INNER));
+    wall.material.side = THREE.DoubleSide;
+    wall.rotation.y = sgn*Math.PI/2;
+    wall.position.set(sgn*ow, spring/2, -D - nicheD/2);
+    g.add(wall);
+  }
+
+  /* 5) ayvon orqa devori — eng chuqur joy, eng to'q */
+  const backSh = new THREE.Shape();
+  backSh.moveTo(-ow, 0);
+  for(const q of ap) backSh.lineTo(q[0], q[1]);
+  backSh.lineTo(ow, 0); backSh.closePath();
+  const back = new THREE.Mesh(new THREE.ShapeGeometry(backSh, 24),
+                              archMat('tile', 1/TU, 1/TU, 0x74869c));
+  back.position.z = -D - nicheD; g.add(back);
+
+  /* 6) ravoq boshidagi muqarnas — mayda kataklar, ayvon ichida */
+  const muq = muqarnasArch(ow*0.92, spring, apex, 4, -D - 0.10, -0.15,
+                           archMat('tile', 1, 1, 0xbf9648));
+  g.add(muq);
+
+  /* 7) burchak guldastalari — yuzadan OLDINGA chiqadi, aks holda hoshiya
+     ichida ko'rinmay qoladi */
+  for(const sgn of [-1, 1]){
+    const gd = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.22, H, 28, 1),
+                              archMat('tile', 2, Math.round(H/TU), 0x24518f));
+    gd.position.set(sgn*(W/2 - 0.06), H/2, 0.17); g.add(gd);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.24, 0.20, 28), archMat('stone'));
+    cap.position.set(sgn*(W/2 - 0.06), H + 0.10, 0.17); g.add(cap);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.28, 0.22, 28), archMat('stone'));
+    foot.position.set(sgn*(W/2 - 0.06), 0.11, 0.17); g.add(foot);
+  }
+
+  /* 8) ravoq yelkasidagi medalyonlar (lunetka) */
+  for(const sgn of [-1, 1]){
+    const med = new THREE.Mesh(new THREE.CircleGeometry(0.28, 40),
+                               archMat('tile', 1/0.62, 1/0.62, 0xd8b45a));
+    med.position.set(sgn*(iw - 0.42), ih - 0.5, 0.01); g.add(med);
+  }
+
+  /* 9) poydevor va tepa gulband */
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 0.5, 0.3, D + nicheD + 0.5), archMat('stone'));
+  plinth.position.set(0, 0.15, -D - nicheD/2 + 0.1); g.add(plinth);
+  const cornice = new THREE.Mesh(new THREE.BoxGeometry(W + 0.36, 0.2, D + 0.36), archMat('stone'));
+  cornice.position.set(0, H + 0.1, -D + 0.06); g.add(cornice);
+
+  g.userData.h = H + 0.2;
+  return g;
+}
+
+function buildArch(kind){
+  T3.archMats = [];
+  const g = kind === 'ustun'   ? buildUstun()
+          : kind === 'darvoza' ? buildDarvoza()
+          :                      buildPeshtoq();
+  g.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+  g.position.y = FLOOR_Y;      /* buyum polda turadi */
+  return g;
+}
+
 /* Lagan — planar UV (medalyon tepadan); piyola/kosa/tuvak — standart UV (friz aylanaga o'raladi, haqiqiy sopolchilikdagidek) */
 const PLATE_KINDS = {lagan:1};
 const FRIEZE_KINDS = {piyola:1, kosa:1, tuvak:1, stakan:1, shar:1};
@@ -5915,6 +6337,19 @@ function arcText(ctx, text, r, fontPx, fillC, strokeC){
   }
   ctx.restore();
 }
+/* Me'moriy yuzalar uchun CHOK-SUZ plitka.
+   Oddiy buyumlarda tekstura buyumga moslab chiziladi (medalyon, friz), me'moriy
+   yuzada esa naqsh yuza bo'ylab KO'P MARTA takrorlanadi — shuning uchun u
+   haqiqiy rapport bo'lishi shart, aks holda har takrorlanishda chok chizig'i
+   ko'rinadi. Shu bois bu yerda eksportdagi bir xil makeSeamlessRepeat()
+   ishlatiladi: uning chok-suzligi 160 holatda o'lchab tekshirilgan. */
+function makeArchTileCanvas(){
+  try{
+    const t = makeSeamlessRepeat(256, T3D.group || 'p4', {});
+    if(t && t.canvas) return t.canvas;
+  }catch(e){ console.warn('[3d] rapport', e); }
+  return makePatternTexture();
+}
 function update3DTexture(){
   if(!threeReady || !T3 || !T3.mat) return;
   const tex = new THREE.CanvasTexture(makePatternTexture());
@@ -5929,6 +6364,29 @@ function update3DTexture(){
     m.needsUpdate = true;
   }
   if(old && old.dispose) old.dispose();
+
+  /* me'moriy qismlar: bitta rapport kanvasi, lekin har qism o'z zichligi
+     bilan — repeat teksturaga tegishli bo'lgani uchun har material o'z
+     nusxasini oladi (rasm xotirada baham ko'riladi) */
+  const arch = T3.archMats || [];
+  if(!arch.length) return;
+  const cnv = makeArchTileCanvas();
+  const base = new THREE.CanvasTexture(cnv);
+  base.wrapS = base.wrapT = THREE.RepeatWrapping;
+  base.anisotropy = 8;
+  if(THREE.sRGBEncoding !== undefined) base.encoding = THREE.sRGBEncoding;
+  for(const m of arch){
+    const rep = m.userData.rep || [1, 1];
+    const t2 = base.clone();
+    t2.needsUpdate = true;
+    t2.wrapS = t2.wrapT = THREE.RepeatWrapping;
+    t2.repeat.set(rep[0], rep[1]);
+    const prev = m.map;
+    m.map = t2;
+    if(m.emissive) m.emissiveMap = t2;
+    m.needsUpdate = true;
+    if(prev && prev.dispose) prev.dispose();
+  }
 }
 const PAINT = { raf:0, active:false };
 /* NAQSH BUYUMDA JONLI CHIZILADI: tekstura progressiv ochiladi, buyum sekin aylanadi */
@@ -6025,6 +6483,18 @@ function disposeObject3D(obj){
     obj.geometry.dispose();
   }
 }
+/* Har buyum uchun kamera kadri: me'moriy ob'yektlar baland, shuning uchun
+   kamera uzoqroqqa suriladi va nigoh markazi yuqoriroqqa ko'tariladi —
+   aks holda ustun yoki peshtoq kadrga sig'maydi. */
+/* look — nigoh markazi, eye — kamera balandligi, d — masofa.
+   Balandlikning yarmiga qaraymiz va shu balandlikdan bir oz yuqoridan
+   turamiz: aks holda kamera tikka pastga qaraydi va bino "yiqilib"
+   ko'rinadi. d ≈ balandlik×1.7 — 42° ko'rish burchagida to'liq sig'adi. */
+const CAM_FRAME = {
+  ustun:   {look: FLOOR_Y + 1.95, eye: FLOOR_Y + 2.35, d: 6.8},
+  darvoza: {look: FLOOR_Y + 2.00, eye: FLOOR_Y + 2.30, d: 7.0},
+  peshtoq: {look: FLOOR_Y + 2.55, eye: FLOOR_Y + 2.90, d: 9.0}
+};
 function setObject(kind){
   if(!T3) return;
   if(T3.mesh){
@@ -6032,7 +6502,14 @@ function setObject(kind){
     disposeObject3D(T3.mesh);
   }
   T3.kind = kind;
-  const obj = new THREE.Mesh(buildGeometry(kind), T3.mat);
+  const cf = CAM_FRAME[kind] || {look:0, eye:1.9, d:4.9};
+  T3.camLook = cf.look; T3.camEye = cf.eye; T3.camDist = cf.d;
+  T3.camera.position.z = cf.d;
+  /* marmar poydevor faqat idishlar uchun — me'moriy ob'yekt polda turadi */
+  if(T3.ped) T3.ped.visible = !ARCH_KINDS[kind];
+  const obj = ARCH_KINDS[kind] ? buildArch(kind)
+                               : new THREE.Mesh(buildGeometry(kind), T3.mat);
+  if(!ARCH_KINDS[kind]) T3.archMats = [];
   if(kind==='lagan') obj.rotation.x = 0.5;   /* lagan yuzi tomoshabinga qaragan */
   if(kind==='panel') obj.rotation.x = 0;
   obj.traverse ? obj.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = false; } })
@@ -6149,7 +6626,7 @@ function init3D(){
   matWood.emissiveIntensity = 0.12;
   const matStone = new THREE.MeshStandardMaterial({color:0xf1ede2, roughness:0.5, metalness:0.02});
   const matDark = new THREE.MeshStandardMaterial({color:0x151009, roughness:1});
-  T3 = {scene, camera, renderer, group, mesh:null, mat, matWood, matStone, matDark, mats:[mat, matWood], amb, hemi, key, fill:fillL, auto:false, kind:'lagan', dust:{pts:dust,pos:dPos,spd:dSpd,n:DUST_N}, parX:0, parY:0, intro:null};
+  T3 = {scene, camera, renderer, group, mesh:null, mat, matWood, matStone, matDark, mats:[mat, matWood], archMats:[], amb, hemi, key, fill:fillL, auto:false, kind:'lagan', dust:{pts:dust,pos:dPos,spd:dSpd,n:DUST_N}, parX:0, parY:0, intro:null, ped, camLook:0, camEye:1.9, camDist:4.9};
   threeReady = true;
   const objSel = $('sel-obj');
   setObject(objSel ? objSel.value : 'lagan');
@@ -6206,8 +6683,9 @@ function init3D(){
     }
     /* parallaks kamera */
     camera.position.x += (T3.parX - camera.position.x)*0.05;
-    camera.position.y += (1.9 + T3.parY - camera.position.y)*0.05;
-    camera.lookAt(0, 0, 0);
+    const eyeY = (T3.camEye === undefined ? 1.9 : T3.camEye);
+    camera.position.y += (eyeY + T3.parY - camera.position.y)*0.05;
+    camera.lookAt(0, T3.camLook || 0, 0);
     renderer.render(scene, camera);
   };
   animate();
