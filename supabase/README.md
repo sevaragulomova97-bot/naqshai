@@ -164,6 +164,42 @@ Faqat ikkita ochiq qiymat kerak (yuqoridagi 2-bo'limga qarang):
 | `service_role` kaliti | **HA** | Faqat Supabase Dashboard'da qoladi |
 | Google Client Secret | **HA** | Faqat Supabase Dashboard'da qoladi |
 
+## Boshqa foydalanuvchilar uchun ishlashi
+
+Database **ko'p foydalanuvchili**: har kim ro'yxatdan o'tadi va faqat o'z
+naqshlarini ko'radi (RLS: `user_id = auth.uid()`).
+
+> ⚠️ **Eng muhim shart.** Supabase manzili va kaliti ikki joydan o'qiladi:
+> avval brauzerdagi `localStorage`, keyin `index.html` dagi doimiylar.
+> Agar siz ularni faqat **⚙ Server sozlash** oynasidan kiritsangiz, bu
+> faqat SIZNING brauzeringizga yoziladi — saytga kirgan boshqa odamlarda
+> server ulanmaydi va ular lokal rejimda qoladi.
+>
+> Hamma uchun ishlashi uchun `index.html` ichidagi ikki qatorga yozing:
+>
+> ```js
+> const SUPABASE_URL = 'https://xxxx.supabase.co';
+> const SUPABASE_ANON_KEY = 'eyJhbGciOi...';   // "anon public"
+> ```
+>
+> `anon` kaliti maxfiy emas — u brauzerga chiqarilishi Supabase
+> arxitekturasida normal, himoya RLS orqali serverda. `service_role`
+> kalitini esa hech qachon bu yerga yozmang.
+
+### Sig'im
+
+Bitta saqlangan naqsh ≈ **11 KB** (ko'rinish rasmi JPEG 0.85 + parametrlar).
+Bir foydalanuvchida eng ko'pi 48 ta → ~0.5 MB.
+
+| Reja | Hajm | Taxminan |
+|---|---|---|
+| Bepul | 500 MB | ~**975** to'la foydalanuvchi (48 tadan) |
+| Pro ($25/oy) | 8 GB | ~15 000 |
+
+Amalda ko'pchilik 48 tagacha yetmaydi, shuning uchun bepul rejada bir
+necha ming foydalanuvchi bemalol sig'adi. Oylik faol foydalanuvchi
+chegarasi bepul rejada 50 000.
+
 ## Naqshlar hisobda saqlanishi
 
 Supabase ulanganda va foydalanuvchi kirgan bo'lsa, saqlangan naqshlar

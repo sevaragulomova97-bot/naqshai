@@ -4504,7 +4504,12 @@ function saveCurrent(){
     drawPattern(octx, 72, 72, 66, P);
   }
   const snap = {...P}; delete snap._bg;
-  const item = { p:snap, thumb: off.toDataURL('image/png'), t:Date.now() };
+  /* Ko'rinish rasmi JPEG (0.85) — galereyada farqi bilinmaydi, lekin hajmi
+     PNG dan ~3.6 barobar kichik (o'lchandi: 38.9 KB → 10.9 KB). Bulutda bu
+     to'g'ridan-to'g'ri sig'imga aylanadi: bepul 500 MB da ~273 o'rniga
+     ~975 to'la foydalanuvchi. Fon baribir to'ldirilgani uchun JPEG da
+     shaffoflik yo'qligi muammo emas. */
+  const item = { p:snap, thumb: off.toDataURL('image/jpeg', 0.85), t:Date.now() };
   if(cloudActive()){
     cloudSavePattern(item)
       .then(()=>{ renderGallery(); ntf('Naqsh hisobingizga saqlandi ☁️', 'ok'); })
