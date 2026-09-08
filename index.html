@@ -422,6 +422,14 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
 .seg button.sel{background:var(--grad-green);color:#f2e8cf;border-color:transparent;box-shadow:0 3px 10px rgba(15,95,75,.35)}
 .check-row{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
 .check-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+.dim-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;
+  font-size:13px;font-weight:600;color:var(--text-soft)}
+.dim-row label{display:flex;align-items:center;gap:6px}
+.dim-row input[type=number]{width:84px;padding:6px 8px;border-radius:8px;
+  border:1px solid var(--line);background:var(--bg-soft);color:var(--text);
+  font:600 13px inherit;text-align:right}
+.dim-row input[type=number]:focus{outline:2px solid var(--accent);outline-offset:1px}
+.dim-x{opacity:.6}
 .modal .m-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 
 /* ===== Auth / Profil ===== */
@@ -785,6 +793,9 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="1024">1024</button>
         <button data-v="2048">2048</button>
       </div>
+      <div class="dim-row">
+        <label>yoki o'zingiz <input type="number" id="exp-jq-c" min="32" max="4096" step="1" value="512"> ilmoq</label>
+      </div>
       <div class="seg" id="exp-jqgroup" style="margin-top:6px">
         <button data-v="p4" class="sel">p4</button>
         <button data-v="p4m">p4m</button>
@@ -799,6 +810,12 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
       <label class="check-row" style="margin-top:6px"><input type="checkbox" id="exp-invert"> Teskari (ip ko'tarilishini almashtirish)</label>
       <div id="jq-info" style="font-size:12px;color:var(--text-soft);margin-top:6px;line-height:1.5"></div>
     </div>
+    <div class="opt-group" id="grp-fill"><span>Naqsh joylashuvi</span>
+      <div class="seg" id="exp-fill">
+        <button data-v="tile" class="sel">To'ldirish (butun yuza)</button>
+        <button data-v="medal">Medalyon (doira)</button>
+      </div>
+    </div>
     <div class="opt-group" id="grp-mm"><span>Fizik o'lcham (mm) — lazer/CNC</span>
       <div class="seg" id="exp-mm">
         <button data-v="100" class="sel">100</button>
@@ -806,12 +823,22 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="300">300</button>
         <button data-v="500">500</button>
       </div>
+      <div class="dim-row">
+        <label>eni <input type="number" id="exp-mm-w" min="5" max="5000" step="1" value="100"> mm</label>
+        <span class="dim-x">×</span>
+        <label>bo'yi <input type="number" id="exp-mm-h" min="5" max="5000" step="1" value="100"> mm</label>
+      </div>
     </div>
     <div class="opt-group" id="grp-size"><span>O'lcham (px)</span>
       <div class="seg" id="exp-size">
         <button data-v="1024">1024</button>
         <button data-v="2048" class="sel">2048</button>
         <button data-v="4096">4096</button>
+      </div>
+      <div class="dim-row">
+        <label>eni <input type="number" id="exp-px-w" min="16" max="12000" step="1" value="2048"> px</label>
+        <span class="dim-x">×</span>
+        <label>bo'yi <input type="number" id="exp-px-h" min="16" max="12000" step="1" value="2048"> px</label>
       </div>
     </div>
     <div class="opt-group"><span>DPI (metama'lumot)</span>
@@ -4448,25 +4475,35 @@ function cmdsToD(cmds){
   }
   return d.trim();
 }
-function recordPattern(){
+/* Naqshni vektor sifatida yozib olish.
+   bw × bh — taxta o'lchami ICHKI birlikda (uzun tomon 1000).
+   fill:
+     'tile'  — naqsh butun yuzani to'ldiradi (tessellatsiya);
+     'medal' — markazda doira medalyon (eski xatti-harakat).
+   Ilgari faqat 500,500,470 — ya'ni HAR DOIM kvadrat taxtadagi DOIRA edi,
+   shuning uchun foydalanuvchi qanday o'lcham tanlasa ham doira chiqardi. */
+function recordPattern(bw, bh, fill){
+  bw = bw || 1000; bh = bh || bw;
   const fake = new SvgCtx();
   const saveTess = TESS.on;
-  drawPattern(fake, 500, 500, 470, P);
+  if(fill === 'medal'){
+    drawPattern(fake, bw/2, bh/2, Math.min(bw, bh)*0.47, P);
+  } else {
+    TESS.on = true;
+    drawTessellation(fake, bw, bh, P);
+  }
   TESS.on = saveTess;
   return fake.paths;
 }
-/* SVG (CorelDraw): faqat kubik Bezier C buyruqlari, hairline qizil kontur */
-function buildSVG(){
-  const paths = recordPattern();
-  let out = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 1000 1000">\n' +
-    '<g stroke="#ff0000" stroke-width="0.072" fill="none" stroke-linecap="round" stroke-linejoin="round">\n';
-  for(const pth of paths){
-    const d = cmdsToD(pth.cmds);
-    if(d) out += '<path d="' + d + '"/>\n';
-  }
-  out += '</g>\n</svg>';
-  return out;
+/* Fizik o'lchamdan ichki taxta o'lchamini chiqarish: uzun tomon 1000
+   birlik, kalta tomon nisbatan. Shunday qilinsa naqsh chizish miqyosi
+   avvalgidek qoladi (kvadrat 100 mm da aynan 1000×1000), lekin
+   to'rtburchak o'lchamlar ham to'g'ri chiqadi. */
+function boardFor(wMm, hMm){
+  const S = 1000;
+  const w = Math.max(1, wMm || 100), h = Math.max(1, hMm || w);
+  const mx = Math.max(w, h);
+  return { bw: S*w/mx, bh: S*h/mx, k: mx/S };   /* k — birlik → mm */
 }
 /* Bezier → 32 nuqtali tabaqalash */
 function flattenCmds(cmds){
@@ -4484,8 +4521,18 @@ function flattenCmds(cmds){
     } else if(c[0]==='C'){
       if(!cur) cur = {pts:[[sx,sy]], closed:false};
       const p0=[sx,sy], p1=[c[1],c[2]], p2=[c[3],c[4]], p3=[c[5],c[6]];
-      for(let i=1;i<=32;i++){
-        cur.pts.push(cubicAt(p0,p1,p2,p3,i/32));
+      /* Adaptiv tabaqalash: segmentlar soni egri chiziq uzunligidan
+         chiqadi. Ilgari har egri qat'iy 32 bo'lakka bo'linardi — mayda
+         egrilarda bu keraksiz nuqtalar (fayl hajmi va ishlov vaqti),
+         yirik egrilarda esa aniqlik yetmasligi mumkin edi.
+         n ≈ √(2·L) da xato ≈ L/(8n²) ≈ 1/16 birlik = 100 mm detalda
+         0.006 mm — lazer aniqligidan ancha mayda. */
+      const L = Math.hypot(p1[0]-p0[0], p1[1]-p0[1]) +
+                Math.hypot(p2[0]-p1[0], p2[1]-p1[1]) +
+                Math.hypot(p3[0]-p2[0], p3[1]-p2[1]);
+      const n = Math.max(3, Math.min(32, Math.ceil(Math.sqrt(2*L))));
+      for(let i=1;i<=n;i++){
+        cur.pts.push(cubicAt(p0,p1,p2,p3,i/n));
       }
       sx=c[5]; sy=c[6];
     } else if(c[0]==='Z'){
@@ -4589,10 +4636,22 @@ function clipPolys(polys, R){
 /* bir xil konturlarni bittaga tushirish — kalit nuqtalar to'plamidan
    yasaladi, shuning uchun yo'nalish va boshlang'ich nuqtaga bog'liq emas */
 function dedupePolys(polys){
+  /* Kalit nuqtalar TO'PLAMIdan yasaladi (yig'indi va XOR — ikkalasi ham
+     tartibdan mustaqil), shuning uchun yo'nalish va boshlang'ich nuqtaga
+     bog'liq emas. Ilgari bu yerda har kontur uchun matn massivi qurilib
+     saralanardi — zich naqshlarda eksportning asosiy sekinlik sababi
+     shu edi. */
   const seen = new Set(), out = [];
   for(const pl of polys){
-    const key = (pl.closed ? 'C' : 'O') + pl.pts.length + '|' +
-      pl.pts.map(q => (Math.round(q[0]*100)/100) + ',' + (Math.round(q[1]*100)/100)).sort().join(';');
+    let h1 = 0, h2 = 0;
+    for(const q of pl.pts){
+      const a = Math.round(q[0]*100) | 0, b = Math.round(q[1]*100) | 0;
+      let v = (Math.imul(a, 73856093) ^ Math.imul(b, 19349663)) >>> 0;
+      v = (v ^ (v >>> 13)) >>> 0;
+      h1 = (h1 + v) >>> 0;
+      h2 = (h2 ^ v) >>> 0;
+    }
+    const key = (pl.closed ? 'C' : 'O') + pl.pts.length + '|' + h1 + '|' + h2;
     if(seen.has(key)) continue;
     seen.add(key);
     out.push(pl);
@@ -4674,14 +4733,15 @@ function mergeOverlaps(polys){
    ustma-ust kesmalarni birlashtirish → mayda parchalarni olib tashlash.
    Oxirgi bosqich: qirqishdan qolgan 0.3 mm dan qisqa parchalar lazerda
    kesma emas, KUYGAN NUQTA beradi (kerf o'zi ~0.1–0.2 mm). */
-function laserPolys(sizeMm){
+function laserPolys(wMm, hMm, fill){
+  const B = boardFor(wMm, hMm);
+  const board = { x0:0, y0:0, x1:B.bw, y1:B.bh };
   const polys = [];
-  for(const pth of recordPattern()){
+  for(const pth of recordPattern(B.bw, B.bh, fill)){
     for(const pl of flattenCmds(pth.cmds)) if(pl.pts.length > 1) polys.push(pl);
   }
-  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, BOARD)));
-  const mm = (sizeMm && sizeMm > 0) ? sizeMm : 100;
-  const minU = 0.3*1000/mm;                     /* 0.3 mm — birlikda */
+  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, board)));
+  const minU = 0.3/B.k;                         /* 0.3 mm — birlikda */
   return merged.filter(pl=>{
     let L = 0;
     for(let i = 1; i < pl.pts.length; i++)
@@ -4694,8 +4754,9 @@ function laserPolys(sizeMm){
 
 /* DXF AC1015 (AutoCAD 2000), $INSUNITS=4 (mm). sizeMm — chetma-chet o'lcham.
    Konturlar yopiq LWPOLYLINE sifatida chiqadi (lazer uchun shart). */
-function buildDXF(sizeMm){
-  const polys = laserPolys(sizeMm);
+function buildDXF(wMm, hMm, fill){
+  const B = boardFor(wMm, hMm);
+  const polys = laserPolys(wMm, hMm, fill);
   let handle = 0x100;
   const hx = ()=> (handle++).toString(16).toUpperCase();
   const L = [];
@@ -4723,17 +4784,18 @@ function buildDXF(sizeMm){
   push('0','SECTION','2','BLOCKS','0','ENDSEC');
   /* ENTITIES */
   push('0','SECTION','2','ENTITIES');
-  const MM = (sizeMm && sizeMm > 0 ? sizeMm : 100) / 1000;  /* viewBox 1000 → sizeMm */
+  const MM = B.k;                                   /* ichki birlik → mm */
+  const BH = B.bh;
   const emitPoly = (pts, closed, layer)=>{
     push('0','LWPOLYLINE','5',hx(),'100','AcDbEntity','8',layer,'100','AcDbPolyline',
          '90', String(pts.length), '70', closed ? '1' : '0');
     for(const q of pts){
       /* DXF y o'qi yuqoriga qaragan — shuning uchun ag'dariladi */
-      push('10', num(q[0]*MM), '20', num((1000-q[1])*MM));
+      push('10', num(q[0]*MM), '20', num((BH-q[1])*MM));
     }
   };
   /* chegara to'rtburchak — lazer stolida joylashtirish uchun */
-  emitPoly([[0,0],[1000,0],[1000,1000],[0,1000]], true, 'Chegara');
+  emitPoly([[0,0],[B.bw,0],[B.bw,BH],[0,BH]], true, 'Chegara');
   for(const pl of polys){
     if(pl.pts.length > 1) emitPoly(pl.pts, pl.closed, 'Naqsh');
   }
@@ -4867,21 +4929,28 @@ function pngSetDPI(bytes, dpi){
   out.set(bytes.subarray(ihdrEnd), ihdrEnd + 21);
   return out;
 }
-function exportPNG(size, dpi, transparent, cb){
+function exportPNG(w, h, dpi, transparent, cb, fill){
+  w = Math.max(16, w|0); h = Math.max(16, h|0) || w;
   const off = document.createElement('canvas');
-  off.width = off.height = size;
+  off.width = w; off.height = h;
   const octx = off.getContext('2d');
   if(!octx){ ntf('Canvas yaratib bo\'lmadi', 'err'); return; }
   const pal = PAL[P.pal] || PAL.gold;
   P._bg = pal.bg;
   if(!transparent){
     octx.fillStyle = pal.bg;
-    octx.fillRect(0,0,size,size);
+    octx.fillRect(0, 0, w, h);
   }
-  if(TESS.on){
-    drawTessellation(octx, size, size, P);
+  /* 'tile' — butun yuzani to'ldiradi (to'rtburchakda ham to'g'ri ishlaydi),
+     'medal' — markazda doira medalyon. Ilgari bu tanlov yo'q edi va
+     tessellatsiya o'chirilgan bo'lsa har doim doira chiqardi. */
+  const doTile = (fill === 'medal') ? false : (fill === 'tile' ? true : TESS.on);
+  if(doTile){
+    const saveTess = TESS.on; TESS.on = true;
+    drawTessellation(octx, w, h, P);
+    TESS.on = saveTess;
   } else {
-    drawPattern(octx, size/2, size/2, size*0.46, P);
+    drawPattern(octx, w/2, h/2, Math.min(w, h)*0.46, P);
   }
   if(off.toBlob){
     off.toBlob(async b=>{
@@ -4891,8 +4960,9 @@ function exportPNG(size, dpi, transparent, cb){
         const withDpi = pngSetDPI(new Uint8Array(await b.arrayBuffer()), dpi);
         blob = new Blob([withDpi], {type:'image/png'});
       }catch(e){ console.warn('[png] pHYs qo\'shilmadi', e); }
-      _dlBlob(blob, 'image/png', 'naqsh_'+P.type+'_'+size+'px_'+dpi+'dpi.png',
-              'PNG yuklab olindi 📥 — ' + dpi + ' dpi, ' + (size/dpi*25.4).toFixed(0) + ' mm');
+      _dlBlob(blob, 'image/png', 'naqsh_'+P.type+'_'+w+'x'+h+'px_'+dpi+'dpi.png',
+              'PNG yuklab olindi 📥 — ' + w + '×' + h + ' px, ' + dpi + ' dpi, ' +
+              (w/dpi*25.4).toFixed(0) + '×' + (h/dpi*25.4).toFixed(0) + ' mm');
       if(cb) cb();
     }, 'image/png');
   } else {
@@ -5461,32 +5531,34 @@ function buildWIF(grid, w, h, meta){
 /* ---------------------------------------------------------------------------
    LAZER: DXF va SVG — haqiqiy mm o'lchamida, yopiq konturlar bilan
    --------------------------------------------------------------------------- */
-function buildLaserSVG(sizeMm, opts){
+function buildLaserSVG(wMm, hMm, opts){
   opts = opts || {};
-  const S = 1000;                       /* ichki koordinata tizimi */
+  const B = boardFor(wMm, hMm);
   const kerf = opts.kerf || 0.1;        /* hairline — lazer dasturlari kesish deb tanidi */
   let out = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<!-- NaqshAI — lazer kesish uchun. Qizil = kesish konturi. O\'lcham: ' + sizeMm + '×' + sizeMm + ' mm -->\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" width="' + sizeMm + 'mm" height="' + sizeMm + 'mm" ' +
-    'viewBox="0 0 ' + S + ' ' + S + '">\n' +
-    '<g id="kesish" stroke="#ff0000" stroke-width="' + (kerf*S/sizeMm).toFixed(3) + '" fill="none" ' +
+    '<!-- NaqshAI — lazer kesish uchun. Qizil = kesish konturi. O\'lcham: ' +
+      wMm + '×' + hMm + ' mm -->\n' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + wMm + 'mm" height="' + hMm + 'mm" ' +
+    'viewBox="0 0 ' + num(B.bw) + ' ' + num(B.bh) + '">\n' +
+    '<g id="kesish" stroke="#ff0000" stroke-width="' + (kerf/B.k).toFixed(3) + '" fill="none" ' +
     'stroke-linecap="round" stroke-linejoin="round">\n';
   /* Taxta ichidagi yo'llar Bezier ko'rinishida qoladi (CorelDraw'da
      tahrirlash uchun silliqroq), chegaradan chiqadiganlari qirqilgan
      poliliniya sifatida chiqadi — DXF bilan aynan bir xil detal bo'lsin. */
-  for(const pl of laserPolys(sizeMm)){
+  for(const pl of laserPolys(wMm, hMm, opts.fill)){
     out += '<path d="M' + pl.pts.map(q => num(q[0]) + ' ' + num(q[1])).join(' L') +
            (pl.closed ? ' Z' : '') + '"/>\n';
   }
   if(opts.frame){
-    out += '<rect x="0" y="0" width="' + S + '" height="' + S + '"/>\n';
+    out += '<rect x="0" y="0" width="' + num(B.bw) + '" height="' + num(B.bh) + '"/>\n';
   }
   out += '</g>\n</svg>';
   return out;
 }
 
 const EXP = { format:'png', size:2048, dpi:300, trans:false,
-              jqsize:512, jqgroup:'p4', jqdepth:1, mm:100, invert:false };
+              jqsize:512, jqgroup:'p4', jqdepth:1, mm:100, invert:false,
+              fill:'tile' };
 
 /* Format tanlanganda qaysi sozlama guruhlari ko'rinishini boshqaradi */
 function expSyncGroups(){
@@ -5499,6 +5571,7 @@ function expSyncGroups(){
   show('grp-trans', isRaster);
   show('grp-jq',    isJq);
   show('grp-mm',    isVector);
+  show('grp-fill',  isRaster || isVector);
   /* WIF faqat 1-bit bo'la oladi — draft ip ko'tarilishidan iborat */
   const dep = $('exp-jqdepth');
   if(dep) dep.style.opacity = (f === 'wif') ? '.45' : '1';
@@ -5615,23 +5688,43 @@ async function exportJacquard(){
   closeExport();
 }
 
+/* Raqamli maydonlardan o'lchamni o'qish — bo'sh yoki noto'g'ri bo'lsa
+   segmentdagi tanlangan qiymatga qaytadi. */
+function expDims(){
+  const rd = (id, def, lo, hi)=>{
+    const el = $(id);
+    if(!el) return def;
+    const v = parseFloat(el.value);
+    if(!isFinite(v)) return def;
+    return Math.min(hi, Math.max(lo, Math.round(v)));
+  };
+  return {
+    mmW: rd('exp-mm-w', EXP.mm, 5, 5000),
+    mmH: rd('exp-mm-h', EXP.mm, 5, 5000),
+    pxW: rd('exp-px-w', EXP.size, 16, 12000),
+    pxH: rd('exp-px-h', EXP.size, 16, 12000),
+    jqc: rd('exp-jq-c', EXP.jqsize, 32, 4096)
+  };
+}
 function doExport(){
   const chk = $('exp-trans');
   EXP.trans = chk ? chk.checked : false;
+  const D = expDims();
   if(EXP.format === 'tiff' || EXP.format === 'bmp' || EXP.format === 'wif'){
+    EXP.jqsize = D.jqc;
     exportJacquard();
     return;
   }
-  if(EXP.format==='png'){
-    exportPNG(EXP.size, EXP.dpi, EXP.trans);
-  } else if(EXP.format==='svg'){
-    const svg = buildLaserSVG(EXP.mm, { frame:true });
-    _dlBlob(svg, 'image/svg+xml', 'naqsh_'+P.type+'_'+EXP.mm+'mm.svg',
-            'SVG yuklab olindi 📥 — ' + EXP.mm + '×' + EXP.mm + ' mm');
+  if(EXP.format === 'png'){
+    exportPNG(D.pxW, D.pxH, EXP.dpi, EXP.trans, null, EXP.fill);
+  } else if(EXP.format === 'svg'){
+    const svg = buildLaserSVG(D.mmW, D.mmH, { frame:true, fill:EXP.fill });
+    _dlBlob(svg, 'image/svg+xml', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.svg',
+            'SVG yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
   } else {
-    const dxf = buildDXF(EXP.mm);
-    _dlBlob(dxf, 'application/dxf', 'naqsh_'+P.type+'_'+EXP.mm+'mm.dxf',
-            'DXF (CNC/lazer) yuklab olindi 📥 — ' + EXP.mm + '×' + EXP.mm + ' mm');
+    const dxf = buildDXF(D.mmW, D.mmH, EXP.fill);
+    _dlBlob(dxf, 'application/dxf', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.dxf',
+            'DXF (CNC/lazer) yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
   }
   closeExport();
 }
@@ -7389,6 +7482,44 @@ function wireUI(){
   segWire('exp-jqgroup','jqgroup',false);
   segWire('exp-jqdepth','jqdepth',true);
   segWire('exp-mm','mm',true);
+  segWire('exp-fill','fill',false);
+  /* Tayyor o'lchamni bosganda raqamli maydonlar ham yangilanadi —
+     shunda foydalanuvchi qaysi qiymat ketayotganini har doim ko'radi. */
+  const linkSeg = (segId, aId, bId)=>{
+    const box = $(segId); if(!box) return;
+    box.addEventListener('click', e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const v = b.dataset.v;
+      const a = $(aId), c = $(bId);
+      if(a) a.value = v;
+      if(c) c.value = v;
+    });
+  };
+  linkSeg('exp-mm',     'exp-mm-w', 'exp-mm-h');
+  linkSeg('exp-size',   'exp-px-w', 'exp-px-h');
+  linkSeg('exp-jqsize', 'exp-jq-c', null);
+  /* Raqam qo'lda o'zgartirilsa — tayyor tugmalardan tanlovni olib tashlaymiz,
+     chunki endi qiymat ularnikiga mos kelmasligi mumkin. */
+  const unsel = (inputIds, segId)=>{
+    for(const id of inputIds){
+      const el = $(id); if(!el) continue;
+      el.addEventListener('input', ()=>{
+        const box = $(segId); if(!box) return;
+        const a = $(inputIds[0]), b = inputIds[1] ? $(inputIds[1]) : null;
+        const same = a && (!b || a.value === b.value) ? a.value : null;
+        box.querySelectorAll('button').forEach(x=>{
+          x.classList.toggle('sel', same !== null && x.dataset.v === same);
+        });
+        if(segId === 'exp-jqsize'){
+          const v = parseInt(el.value, 10);
+          if(isFinite(v)){ EXP.jqsize = Math.min(4096, Math.max(32, v)); expJqInfo(); }
+        }
+      });
+    }
+  };
+  unsel(['exp-mm-w','exp-mm-h'], 'exp-mm');
+  unsel(['exp-px-w','exp-px-h'], 'exp-size');
+  unsel(['exp-jq-c'], 'exp-jqsize');
   /* 3D */
   const objSel = $('sel-obj'); if(objSel) objSel.addEventListener('change', ()=>{ if(threeReady) setObject(objSel.value); });
   const lightSel = $('sel-light'); if(lightSel) lightSel.addEventListener('change', ()=>{ if(threeReady) setLights(lightSel.value); });
