@@ -2567,18 +2567,28 @@ function drawXitoy(ctx,R,p,sw,c0,c1,c2,c3){
       const rot = ((gx+gy)%4) * Math.PI/2 + p.skew*0.4;
       ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
       ctx.beginPath();
-      ctx.moveTo(0,-tLen); ctx.lineTo(0,tLen*0.2);
+      /* T ning oyog'i katak CHEGARASIGACHA boradi — panjara bilan
+         tutashadi. Ilgari u faqat tLen gacha chizilar va motiv katak
+         ichida "suzib" qolardi: naqsh uzilgan ko'rinardi, lazerda
+         kesilganda esa bunday bo'lak paneldan tushib ketardi. */
+      ctx.moveTo(0,-s/2); ctx.lineTo(0,tLen*0.2);
       ctx.moveTo(-tBar,tLen*0.2); ctx.lineTo(tBar,tLen*0.2);
       ctx.moveTo(-tBar,tLen*0.2); ctx.lineTo(-tBar,tLen*0.62);
       ctx.moveTo(tBar,tLen*0.2); ctx.lineTo(tBar,tLen*0.62);
       ctx.restore();
       st(ctx, (gx+gy)%2? c1:c2, sw*0.75);
-      /* burchak qavslari */
+      /* Burchak qavslari — TO'RTALA burchakda, katakdan biroz ichkarida.
+         Ilgari faqat ikki qarama-qarshi burchakda chizilar va ular
+         panjara chizig'i ustiga tushib, tasodifiy chiziqchalardek
+         ko'rinardi. To'rttasi birgalikda ichki ramka hosil qiladi —
+         xitoy fretworkidagi klassik motiv. */
       if(p.cmp>=4){
         ctx.beginPath();
-        const q=s*0.16;
-        ctx.moveTo(cx-s/2+q*2, cy-s/2); ctx.lineTo(cx-s/2, cy-s/2); ctx.lineTo(cx-s/2, cy-s/2+q*2);
-        ctx.moveTo(cx+s/2-q*2, cy+s/2); ctx.lineTo(cx+s/2, cy+s/2); ctx.lineTo(cx+s/2, cy+s/2-q*2);
+        const q = s*0.15, inn = s*0.06, h2 = s/2 - inn;
+        for(const [sx2, sy2] of [[-1,-1],[1,-1],[1,1],[-1,1]]){
+          const px = cx + sx2*h2, py = cy + sy2*h2;
+          ctx.moveTo(px - sx2*q, py); ctx.lineTo(px, py); ctx.lineTo(px, py - sy2*q);
+        }
         st(ctx,c3,sw*0.6);
       }
     }
@@ -2704,11 +2714,24 @@ function drawHilbert(ctx,R,p,sw,c0,c1,c2,c3){
 /* 33. Spirograph — epitrochoid */
 function drawSpirograph(ctx,R,p,sw,c0,c1,c2,c3){
   const R0 = R*0.62;
-  const kNum = Math.max(1, p.sym - 2), kDen = Math.max(2, p.sym + p.cmp);
-  const r = R0*kNum/kDen;
-  const d = r*(0.5 + p.spir*1.4);
-  const loops = kDen;
-  const steps = 240*Math.min(loops,10);
+  /* Gipotroxoida: r = R0·a/b (a va b o'zaro tub) → egri b ta cho'qqili
+     bo'lib, a ta aylanishdan keyin yopiladi.
+     DIQQAT — DEGENERATSIYA: b = 2a bo'lganda (R0−r)/r = 1 va egri
+     ELLIPSGA aylanadi; d ≈ r bo'lsa esa TO'G'RI CHIZIQQA siqiladi.
+     Eski formulada kNum = sym−2, kDen = sym+cmp edi va standart
+     qiymatlarda (sym 8, cmp 4) aynan kDen = 2·kNum chiqib qolardi —
+     shuning uchun spirograf o'rniga to'g'ri chiziqlar chizilardi.
+     Endi bu holat aniq chetlab o'tiladi. */
+  const gcd = (x, y)=>{ x = Math.abs(x); y = Math.abs(y); while(y){ const t = y; y = x % y; x = t; } return x || 1; };
+  let b = Math.max(3, p.sym | 0);
+  let a = 1 + ((p.cmp | 0) % Math.max(1, b - 1));
+  const g0 = gcd(a, b); a = a/g0; b = b/g0;
+  if(b === 2*a) b += 1;                     /* ellips/chiziqqa aylanmasin */
+  if(a >= b) a = 1;
+  const r = R0*a/b;
+  const d = r*(0.45 + p.spir*1.1);
+  const loops = a;
+  const steps = Math.max(480, 180*b);
   const pts=[];
   let maxR=0;
   for(let i=0;i<=steps;i++){
