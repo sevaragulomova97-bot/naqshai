@@ -104,8 +104,40 @@ ko'tariladi, shuning uchun tie-up ziddiyatsiz chiqadi.
 
 | Format | Izoh |
 |---|---|
-| **DXF** | AutoCAD 2000 (AC1015), `$INSUNITS=4` (mm) |
+| **EPS** | Encapsulated PostScript — lazer dasturlari ro'yxatida odatda birinchi turadi |
+| **DXF** | **R12 (AC1009)**, `$INSUNITS=4` + `$MEASUREMENT=1` (mm) |
 | **SVG** | Haqiqiy mm o'lchamida, hairline qizil kontur = kesish yo'li |
+
+### Nega DXF R12?
+
+Lazer apparatlarining import moduli ko'pincha ancha eski bo'ladi va faqat
+R12 ni to'liq o'qiydi. Ilgari AC1015 (AutoCAD 2000) va `LWPOLYLINE`
+ishlatilardi, lekin:
+
+- `LWPOLYLINE` R14 dan boshlab paydo bo'lgan;
+- handle (kod 5) va `AcDbEntity` sinf belgilari R13+ ga tegishli.
+
+Eski o'qigich ularda to'xtaydi yoki bo'sh chizma ochadi. R12 — eng past
+umumiy maxraj: uni R12 dan keyingi **hamma** dastur o'qiydi. Shuning uchun
+`POLYLINE` / `VERTEX` / `SEQEND` ishlatiladi, handle va sinf belgilari yo'q,
+qatorlar CRLF bilan tugaydi.
+
+### EPS
+
+Oddiy matn: faqat `moveto` / `lineto` va `stroke`. Birlik — PostScript
+punkti (1 pt = 0.352778 mm), `%%BoundingBox` aynan detal o'lchamiga teng,
+`showpage` yo'q (EPS talabi). Qizil hairline — kesish konturi.
+
+### Sirt fakturasi vektorga tushmaydi
+
+«O'yma panel» naqshidagi nuqtali fon va relyef (yorug'-soya nusxalari)
+faqat ekran va PNG uchun. Vektor eksportida ular **chizilmaydi**:
+
+- nuqtali fon lazerga minglab mayda doira, ya'ni minglab alohida teshik
+  bo'lib ketardi — o'lchandi: 180×120 mm panelda **3019 kontur, 2.5 MB**;
+- relyef nusxalari har chiziqni **uch marta** kestirardi.
+
+Tuzatilgandan keyin: **76 kontur, 236 KB**.
 
 - Fizik o'lcham tanlanadi: **100 / 200 / 300 / 500 mm**.
 - Qatlamlar: `Naqsh` (kesish konturi) va `Chegara` (joylashtirish ramkasi).

@@ -792,6 +792,7 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="png" class="sel">PNG</button>
         <button data-v="svg">SVG</button>
         <button data-v="dxf">DXF</button>
+        <button data-v="eps">EPS</button>
       </div>
     </div>
     <div class="opt-group"><span>🧵 Jakkard to'quv dastgohi</span>
@@ -1723,14 +1724,24 @@ function drawOyma(ctx,R,p,sw,c0,c1,c2,c3){
 
   /* --- RELYEF yordamchisi: konturni yorug' va soya nusxasi bilan --- */
   const d = Math.max(0.55, lw*0.55);
+  /* Vektor eksportida (SVG/DXF/EPS) yorug'-soya nusxalari CHIZILMAYDI:
+     ular ekranda o'yma taassurotini beradi, lekin lazer uchun bu HAR
+     CHIZIQNI UCH MARTA kesish degani — material kuyadi va ish vaqti uch
+     barobar oshadi. SvgCtx o'zini ctx._svg bilan tanitadi. */
+  const vec = !!ctx._svg;
   const relief = (path, wid)=>{
-    ctx.save(); ctx.translate(-d, -d); ctx.beginPath(); path(); st(ctx, light, wid); ctx.restore();
-    ctx.save(); ctx.translate( d,  d); ctx.beginPath(); path(); st(ctx, dark,  wid); ctx.restore();
+    if(!vec){
+      ctx.save(); ctx.translate(-d, -d); ctx.beginPath(); path(); st(ctx, light, wid); ctx.restore();
+      ctx.save(); ctx.translate( d,  d); ctx.beginPath(); path(); st(ctx, dark,  wid); ctx.restore();
+    }
     ctx.beginPath(); path(); st(ctx, c0, wid);
   };
 
-  /* --- 1) NUQTALI FON — o'yilgan pastki qatlam --- */
-  if(p.dens > 0.15){
+  /* --- 1) NUQTALI FON — o'yilgan pastki qatlam ---
+     Bu SIRT FAKTURASI, kesish konturi emas. Vektor eksportida chizilmaydi:
+     aks holda lazerga minglab mayda doira (har biri alohida teshik) ketardi —
+     o'lchandi: 180x120 mm o'yma panelda 3019 kontur, 2.5 MB DXF. */
+  if(!vec && p.dens > 0.15){
     ctx.save();
     ctx.beginPath(); oymaCartouche(ctx, iw, ih); ctx.clip();
     const step = Math.max(R*0.026, R*0.055*(1.15 - p.dens));
@@ -5059,53 +5070,119 @@ function laserPolys(wMm, hMm, fill){
 
 /* DXF AC1015 (AutoCAD 2000), $INSUNITS=4 (mm). sizeMm — chetma-chet o'lcham.
    Konturlar yopiq LWPOLYLINE sifatida chiqadi (lazer uchun shart). */
+/* ---------------------------------------------------------------------------
+   DXF — R12 (AC1009)
+   ---------------------------------------------------------------------------
+   Ilgari AC1015 (AutoCAD 2000) va LWPOLYLINE ishlatilardi. Lazer
+   apparatlarining import moduli ko'pincha ANCHA ESKI bo'ladi va faqat R12 ni
+   to'liq o'qiydi: LWPOLYLINE R14 dan boshlab paydo bo'lgan, handle (5) va
+   AcDbEntity sinf belgilari esa R13+ ga tegishli — eski o'qigich ularda
+   to'xtaydi yoki bo'sh chizma ochadi.
+   R12 — eng past umumiy maxraj: uni R12 dan keyingi HAMMA dastur o'qiydi.
+   Shuning uchun bu yerda POLYLINE/VERTEX/SEQEND ishlatiladi, handle va
+   sinf belgilari yo'q.
+   --------------------------------------------------------------------------- */
 function buildDXF(wMm, hMm, fill){
   const B = boardFor(wMm, hMm);
   const polys = laserPolys(wMm, hMm, fill);
-  let handle = 0x100;
-  const hx = ()=> (handle++).toString(16).toUpperCase();
   const L = [];
   const push = (...a)=>{ for(const x of a) L.push(x); };
-  /* HEADER */
-  push('0','SECTION','2','HEADER',
-       '9','$ACADVER','1','AC1015',
-       '9','$INSUNITS','70','4',
-       '9','$HANDSEED','5','FFFF',
-       '0','ENDSEC');
-  /* TABLES */
-  push('0','SECTION','2','TABLES');
-  push('0','TABLE','2','LTYPE','5',hx(),'100','AcDbSymbolTable','70','1',
-       '0','LTYPE','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLinetypeTableRecord',
-       '2','CONTINUOUS','70','0','3','Solid line','72','65','73','0','40','0.0',
-       '0','ENDTAB');
-  push('0','TABLE','2','LAYER','5',hx(),'100','AcDbSymbolTable','70','2',
-       '0','LAYER','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLayerTableRecord',
-       '2','Naqsh','70','0','62','1','6','CONTINUOUS',
-       '0','LAYER','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLayerTableRecord',
-       '2','Chegara','70','0','62','7','6','CONTINUOUS',
-       '0','ENDTAB');
-  push('0','ENDSEC');
-  /* BLOCKS (bo'sh) */
-  push('0','SECTION','2','BLOCKS','0','ENDSEC');
-  /* ENTITIES */
-  push('0','SECTION','2','ENTITIES');
   const MM = B.k;                                   /* ichki birlik → mm */
   const BH = B.bh;
+  const W = B.bw*MM, H = BH*MM;
+
+  /* HEADER — o'lchov birligi metrik ekani ikki xil kalit bilan aytiladi:
+     $INSUNITS (R13+) va $MEASUREMENT (R12 o'qigichlari shuni qaraydi) */
+  push('0','SECTION','2','HEADER',
+       '9','$ACADVER','1','AC1009',
+       '9','$INSUNITS','70','4',
+       '9','$MEASUREMENT','70','1',
+       '9','$EXTMIN','10','0.0','20','0.0','30','0.0',
+       '9','$EXTMAX','10',num(W),'20',num(H),'30','0.0',
+       '0','ENDSEC');
+
+  /* TABLES — R12 shaklida: handle yo'q, sinf belgisi yo'q */
+  push('0','SECTION','2','TABLES');
+  push('0','TABLE','2','LTYPE','70','1',
+       '0','LTYPE','2','CONTINUOUS','70','0','3','Solid line','72','65','73','0','40','0.0',
+       '0','ENDTAB');
+  push('0','TABLE','2','LAYER','70','2',
+       '0','LAYER','2','Naqsh','70','0','62','1','6','CONTINUOUS',
+       '0','LAYER','2','Chegara','70','0','62','7','6','CONTINUOUS',
+       '0','ENDTAB');
+  push('0','ENDSEC');
+  push('0','SECTION','2','BLOCKS','0','ENDSEC');
+
+  /* ENTITIES */
+  push('0','SECTION','2','ENTITIES');
   const emitPoly = (pts, closed, layer)=>{
-    push('0','LWPOLYLINE','5',hx(),'100','AcDbEntity','8',layer,'100','AcDbPolyline',
-         '90', String(pts.length), '70', closed ? '1' : '0');
+    push('0','POLYLINE','8',layer,'66','1','70', closed ? '1' : '0',
+         '10','0.0','20','0.0','30','0.0');
     for(const q of pts){
       /* DXF y o'qi yuqoriga qaragan — shuning uchun ag'dariladi */
-      push('10', num(q[0]*MM), '20', num((BH-q[1])*MM));
+      push('0','VERTEX','8',layer,
+           '10', num(q[0]*MM), '20', num((BH-q[1])*MM), '30','0.0');
     }
+    push('0','SEQEND','8',layer);
   };
-  /* chegara to'rtburchak — lazer stolida joylashtirish uchun */
   emitPoly([[0,0],[B.bw,0],[B.bw,BH],[0,BH]], true, 'Chegara');
   for(const pl of polys){
     if(pl.pts.length > 1) emitPoly(pl.pts, pl.closed, 'Naqsh');
   }
   push('0','ENDSEC','0','EOF');
-  return L.join('\n');
+  return L.join('\r\n') + '\r\n';   /* R12 o'qigichlari CRLF ni kutadi */
+}
+
+/* ---------------------------------------------------------------------------
+   EPS — Encapsulated PostScript
+   ---------------------------------------------------------------------------
+   Lazer apparatlarining import ro'yxatida EPS odatda BIRINCHI turadi va eng
+   ishonchli format: u oddiy MATN, ichida faqat to'g'ri chiziqlar va
+   moveto/lineto buyruqlari bo'ladi.
+   Birlik — PostScript punkti (1 pt = 1/72 dyuym = 0.352778 mm), shuning
+   uchun mm → pt: ×72/25.4. BoundingBox aynan detal o'lchamiga teng.
+   --------------------------------------------------------------------------- */
+function buildEPS(wMm, hMm, opts){
+  opts = opts || {};
+  const B = boardFor(wMm, hMm);
+  const polys = laserPolys(wMm, hMm, opts.fill);
+  const K = B.k*72/25.4;                 /* ichki birlik → punkt */
+  const BH = B.bh;
+  const Wp = B.bw*K, Hp = BH*K;
+  const kerf = (opts.kerf || 0.1)*72/25.4;
+  const n2 = v => (Math.round(v*100)/100).toString();
+  const out = [];
+  out.push('%!PS-Adobe-3.0 EPSF-3.0');
+  out.push('%%Creator: NaqshAI');
+  out.push('%%Title: naqsh ' + wMm + 'x' + hMm + ' mm');
+  out.push('%%BoundingBox: 0 0 ' + Math.ceil(Wp) + ' ' + Math.ceil(Hp));
+  out.push('%%HiResBoundingBox: 0 0 ' + n2(Wp) + ' ' + n2(Hp));
+  out.push('%%DocumentData: Clean7Bit');
+  out.push('%%LanguageLevel: 2');
+  out.push('%%EndComments');
+  out.push('%%BeginProlog');
+  out.push('/m {moveto} bind def /l {lineto} bind def');
+  out.push('/h {closepath} bind def /S {stroke} bind def');
+  out.push('%%EndProlog');
+  out.push('%%Page: 1 1');
+  out.push('gsave');
+  out.push('1 0 0 setrgbcolor');          /* qizil = kesish konturi */
+  out.push(n2(kerf) + ' setlinewidth');
+  out.push('1 setlinecap 1 setlinejoin');
+  const emit = (pts, closed)=>{
+    if(pts.length < 2) return;
+    let line = 'newpath ' + n2(pts[0][0]*K) + ' ' + n2((BH - pts[0][1])*K) + ' m';
+    for(let i = 1; i < pts.length; i++)
+      line += ' ' + n2(pts[i][0]*K) + ' ' + n2((BH - pts[i][1])*K) + ' l';
+    if(closed) line += ' h';
+    out.push(line + ' S');
+  };
+  if(opts.frame) emit([[0,0],[B.bw,0],[B.bw,BH],[0,BH]], true);
+  for(const pl of polys) emit(pl.pts, pl.closed);
+  out.push('grestore');
+  out.push('%%Trailer');
+  out.push('%%EOF');
+  return out.join('\n') + '\n';
 }
 /* Yuklab olish helper */
 function _dataURLtoBlob(dataURL){
@@ -5142,7 +5219,7 @@ async function _dlBlob(content, mime, filename, successMsg){
              DXF va WIF — MATN fayllar, shuning uchun ularni .txt sifatida
              saqlab berish mumkin: foydalanuvchi nomini o'zgartirsa bo'ldi. */
           const ext = (filename.split('.').pop() || '').toLowerCase();
-          if(ext === 'dxf' || ext === 'wif'){
+          if(ext === 'dxf' || ext === 'wif' || ext === 'eps'){
             try{
               await downloads.save({ filename: filename + '.txt', data: blob });
               ntf('Ko\'rish oynasi .' + ext + ' ni saqlay olmaydi — fayl «' +
@@ -5870,7 +5947,7 @@ function expSyncGroups(){
   const f = EXP.format;
   const isRaster  = (f === 'png');
   const isJq      = (f === 'tiff' || f === 'bmp' || f === 'wif');
-  const isVector  = (f === 'svg' || f === 'dxf');
+  const isVector  = (f === 'svg' || f === 'dxf' || f === 'eps');
   const show = (id, on) => { const el = $(id); if(el) el.style.display = on ? '' : 'none'; };
   show('grp-size',  isRaster);
   show('grp-trans', isRaster);
@@ -6026,6 +6103,10 @@ function doExport(){
     const svg = buildLaserSVG(D.mmW, D.mmH, { frame:true, fill:EXP.fill });
     _dlBlob(svg, 'image/svg+xml', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.svg',
             'SVG yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
+  } else if(EXP.format === 'eps'){
+    const eps = buildEPS(D.mmW, D.mmH, { frame:true, fill:EXP.fill });
+    _dlBlob(eps, 'application/postscript', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.eps',
+            'EPS yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
   } else {
     const dxf = buildDXF(D.mmW, D.mmH, EXP.fill);
     _dlBlob(dxf, 'application/dxf', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.dxf',
