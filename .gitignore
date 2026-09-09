@@ -1,0 +1,8 @@
+# maxfiy qiymatlar hech qachon repoga tushmasin
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+node_modules/

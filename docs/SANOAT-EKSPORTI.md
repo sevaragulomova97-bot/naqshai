@@ -104,8 +104,40 @@ ko'tariladi, shuning uchun tie-up ziddiyatsiz chiqadi.
 
 | Format | Izoh |
 |---|---|
-| **DXF** | AutoCAD 2000 (AC1015), `$INSUNITS=4` (mm) |
+| **EPS** | Encapsulated PostScript — lazer dasturlari ro'yxatida odatda birinchi turadi |
+| **DXF** | **R12 (AC1009)**, `$INSUNITS=4` + `$MEASUREMENT=1` (mm) |
 | **SVG** | Haqiqiy mm o'lchamida, hairline qizil kontur = kesish yo'li |
+
+### Nega DXF R12?
+
+Lazer apparatlarining import moduli ko'pincha ancha eski bo'ladi va faqat
+R12 ni to'liq o'qiydi. Ilgari AC1015 (AutoCAD 2000) va `LWPOLYLINE`
+ishlatilardi, lekin:
+
+- `LWPOLYLINE` R14 dan boshlab paydo bo'lgan;
+- handle (kod 5) va `AcDbEntity` sinf belgilari R13+ ga tegishli.
+
+Eski o'qigich ularda to'xtaydi yoki bo'sh chizma ochadi. R12 — eng past
+umumiy maxraj: uni R12 dan keyingi **hamma** dastur o'qiydi. Shuning uchun
+`POLYLINE` / `VERTEX` / `SEQEND` ishlatiladi, handle va sinf belgilari yo'q,
+qatorlar CRLF bilan tugaydi.
+
+### EPS
+
+Oddiy matn: faqat `moveto` / `lineto` va `stroke`. Birlik — PostScript
+punkti (1 pt = 0.352778 mm), `%%BoundingBox` aynan detal o'lchamiga teng,
+`showpage` yo'q (EPS talabi). Qizil hairline — kesish konturi.
+
+### Sirt fakturasi vektorga tushmaydi
+
+«O'yma panel» naqshidagi nuqtali fon va relyef (yorug'-soya nusxalari)
+faqat ekran va PNG uchun. Vektor eksportida ular **chizilmaydi**:
+
+- nuqtali fon lazerga minglab mayda doira, ya'ni minglab alohida teshik
+  bo'lib ketardi — o'lchandi: 180×120 mm panelda **3019 kontur, 2.5 MB**;
+- relyef nusxalari har chiziqni **uch marta** kestirardi.
+
+Tuzatilgandan keyin: **76 kontur, 236 KB**.
 
 - Fizik o'lcham tanlanadi: **100 / 200 / 300 / 500 mm**.
 - Qatlamlar: `Naqsh` (kesish konturi) va `Chegara` (joylashtirish ramkasi).
@@ -205,6 +237,29 @@ Mustaqil Python parserlari bilan:
   kesiladi), lekin kesish tartibi zanjirlar bo'yicha boradi.
 - **WIF ramka soni** murakkab naqshda 80–100 ga yetadi — bu faqat
   Jakkardda mumkin, oddiy ramkali dastgohda emas. Ilova buni xabar qiladi.
+
+## 3D va AR da naqsh taqsimoti
+
+3D buyum va AR sirtlarida naqsh **bir marta cho'zib emas, rapport sifatida
+takrorlanib** yotadi — tekstura eksportdagi aynan bir xil
+`makeSeamlessRepeat()` dan olinadi.
+
+**Takrorlanish soni buyum o'lchamidan hisoblanadi**, shuning uchun naqsh har
+buyumda bir xil fizik o'lchamda chiqadi (o'lchangan: plitka eni 0.575–0.651
+dunyo birligi, ya'ni ±6% ichida).
+
+Ikki qat'iy shart:
+
+1. **Aylanma yuzalarda `u` butun son bo'lishi shart** — aks holda buyum
+   orqasida ulanish chizig'i paydo bo'ladi. Barcha 28 holatda (7 buyum × 4
+   guruh) butun.
+2. **Naqsh cho'zilmasligi kerak.** `v` yo'nalishidagi uzunlik bbox
+   balandligidan emas, geometriyaning o'zidan o'lchanadi (profil/meridian
+   bo'ylab): piyolada profil 2.06, balandlik esa atigi 1.4 — bbox dan
+   hisoblansa naqsh ~60% cho'zilardi. Buzilish endi 14/14 holatda ±25% ichida.
+
+AR'da gilam va pol sirtlari ham chok-suz maydondan yig'iladi. Ilgari u yerda
+medalyon 3×3 qilib takrorlanar va plitkalar orasida uzilish ko'rinardi.
 
 ## Amaliy maslahat
 

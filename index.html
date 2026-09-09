@@ -422,6 +422,25 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
 .seg button.sel{background:var(--grad-green);color:#f2e8cf;border-color:transparent;box-shadow:0 3px 10px rgba(15,95,75,.35)}
 .check-row{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
 .check-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+.prof{display:flex;gap:10px;align-items:center;padding:10px;margin-bottom:10px;
+  border:1px solid var(--line);border-radius:12px;background:var(--bg-soft)}
+.prof-av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:grid;place-items:center;
+  font:800 15px var(--f-disp);color:#fff;background:linear-gradient(135deg,#2f7a63,#c9a227)}
+.prof-i{min-width:0;flex:1}
+.prof-n{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-m{font-size:11.5px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-b{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;
+  font-size:10.5px;font-weight:700;border:1px solid var(--line)}
+.prof-b.cloud{background:#e8f3ee;color:#1d6b53;border-color:#bfe0d2}
+.prof-b.local{background:#f4efe2;color:#8a6b1f;border-color:#e2d5ac}
+.dim-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;
+  font-size:13px;font-weight:600;color:var(--text-soft)}
+.dim-row label{display:flex;align-items:center;gap:6px}
+.dim-row input[type=number]{width:84px;padding:6px 8px;border-radius:8px;
+  border:1px solid var(--line);background:var(--bg-soft);color:var(--text);
+  font:600 13px inherit;text-align:right}
+.dim-row input[type=number]:focus{outline:2px solid var(--accent);outline-offset:1px}
+.dim-x{opacity:.6}
 .modal .m-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 
 /* ===== Auth / Profil ===== */
@@ -573,6 +592,7 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
     <div class="acc open" id="acc-gal">
       <button class="acc-h">Saqlangan naqshlar <span class="chev">▾</span></button>
       <div class="acc-b"><div class="acc-inner">
+        <div id="profile-box"></div>
         <div class="gal-grid" id="gal-grid"></div>
         <div class="gal-empty" id="gal-empty">Hozircha saqlangan naqsh yo'q. «💾 Saqlash» tugmasini bosing.</div>
       </div></div>
@@ -602,6 +622,9 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
       <option value="stakan">Stakan</option>
       <option value="panel">Panel</option>
       <option value="shar">Shar</option>
+      <option value="ustun">🏛 Ustun (o'yma)</option>
+      <option value="darvoza">🚪 Darvoza</option>
+      <option value="peshtoq">🕌 Peshtoq (ayvon)</option>
     </select>
     <select class="mini-select" id="sel-light">
       <option value="warm">Iliq yorug'lik</option>
@@ -769,6 +792,7 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="png" class="sel">PNG</button>
         <button data-v="svg">SVG</button>
         <button data-v="dxf">DXF</button>
+        <button data-v="eps">EPS</button>
       </div>
     </div>
     <div class="opt-group"><span>🧵 Jakkard to'quv dastgohi</span>
@@ -785,6 +809,9 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="1024">1024</button>
         <button data-v="2048">2048</button>
       </div>
+      <div class="dim-row">
+        <label>yoki o'zingiz <input type="number" id="exp-jq-c" min="32" max="4096" step="1" value="512"> ilmoq</label>
+      </div>
       <div class="seg" id="exp-jqgroup" style="margin-top:6px">
         <button data-v="p4" class="sel">p4</button>
         <button data-v="p4m">p4m</button>
@@ -799,6 +826,12 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
       <label class="check-row" style="margin-top:6px"><input type="checkbox" id="exp-invert"> Teskari (ip ko'tarilishini almashtirish)</label>
       <div id="jq-info" style="font-size:12px;color:var(--text-soft);margin-top:6px;line-height:1.5"></div>
     </div>
+    <div class="opt-group" id="grp-fill"><span>Naqsh joylashuvi</span>
+      <div class="seg" id="exp-fill">
+        <button data-v="tile" class="sel">To'ldirish (butun yuza)</button>
+        <button data-v="medal">Medalyon (doira)</button>
+      </div>
+    </div>
     <div class="opt-group" id="grp-mm"><span>Fizik o'lcham (mm) — lazer/CNC</span>
       <div class="seg" id="exp-mm">
         <button data-v="100" class="sel">100</button>
@@ -806,12 +839,22 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <button data-v="300">300</button>
         <button data-v="500">500</button>
       </div>
+      <div class="dim-row">
+        <label>eni <input type="number" id="exp-mm-w" min="5" max="5000" step="1" value="100"> mm</label>
+        <span class="dim-x">×</span>
+        <label>bo'yi <input type="number" id="exp-mm-h" min="5" max="5000" step="1" value="100"> mm</label>
+      </div>
     </div>
     <div class="opt-group" id="grp-size"><span>O'lcham (px)</span>
       <div class="seg" id="exp-size">
         <button data-v="1024">1024</button>
         <button data-v="2048" class="sel">2048</button>
         <button data-v="4096">4096</button>
+      </div>
+      <div class="dim-row">
+        <label>eni <input type="number" id="exp-px-w" min="16" max="12000" step="1" value="2048"> px</label>
+        <span class="dim-x">×</span>
+        <label>bo'yi <input type="number" id="exp-px-h" min="16" max="12000" step="1" value="2048"> px</label>
       </div>
     </div>
     <div class="opt-group"><span>DPI (metama'lumot)</span>
@@ -1641,6 +1684,150 @@ function drawIslimiy(ctx,R,p,sw,c0,c1,c2,c3){
   }
   ctx.beginPath(); circle(ctx,0,0,R*0.05+sw); fillHard(ctx,c0,0.95);
   ctx.beginPath(); circle(ctx,0,0,R); st(ctx,c2,sw*0.5);
+}
+
+/* ---------------------------------------------------------------------------
+   O'YMA PANEL (kartush) — Xiva/Farg'ona yog'och o'ymakorligi uslubi
+   ---------------------------------------------------------------------------
+   Ustun qirralaridagi va eshik tabaqalaridagi naqsh radial medalyon EMAS:
+   u tik KARTUSH — ramkali panel, ichida o'qqa nisbatan KO'ZGU-SIMMETRIK
+   islimiy. Uch xususiyati bu uslubni tanitadi va shu yerda takrorlanadi:
+
+     1) kartush ramkasi — yon tomonlari tik, uchlari siniq (ogee) yoy;
+     2) NUQTALI FON ("chizma" / pargori) — o'yilgan pastki qatlam;
+     3) RELYEF — har kontur ostiga yorug' va soya nusxasi, shunda naqsh
+        yassi chiziq emas, o'yilgan sirt bo'lib ko'rinadi.
+
+   Barcha shakllar oddiy yo'l buyruqlari bilan chiziladi (offscreen kanvas
+   yoki filtr ishlatilmaydi), shuning uchun SVG/DXF eksporti ham ishlaydi.
+   --------------------------------------------------------------------------- */
+function oymaCartouche(ctx, w, h){
+  const tip = h*0.22;                       /* uchdagi yoy balandligi */
+  ctx.moveTo(-w, -h + tip);
+  ctx.lineTo(-w,  h - tip);
+  /* yuqori siniq yoy: nazorat nuqtalari cho'qqida qarama-qarshi yo'nalgani
+     uchun uchi yumaloq emas, O'TKIR chiqadi */
+  ctx.bezierCurveTo(-w, h - tip*0.32, -w*0.13, h*1.02, 0, h);
+  ctx.bezierCurveTo( w*0.13, h*1.02,  w, h - tip*0.32, w, h - tip);
+  ctx.lineTo( w, -h + tip);
+  ctx.bezierCurveTo( w, -h + tip*0.32,  w*0.13, -h*1.02, 0, -h);
+  ctx.bezierCurveTo(-w*0.13, -h*1.02, -w, -h + tip*0.32, -w, -h + tip);
+  ctx.closePath();
+}
+
+function drawOyma(ctx,R,p,sw,c0,c1,c2,c3){
+  const hw = R*0.60, hh = R*0.95;
+  const fw = R*0.070;                       /* ramka eni */
+  const lw = Math.max(0.6, sw*0.85);
+  const iw = hw - fw*2.1, ih = hh - fw*2.1; /* ichki maydon */
+  const dark = shade(c0, 0.55), light = lerpColor(c1, '#ffffff', 0.72);
+
+  /* --- RELYEF yordamchisi: konturni yorug' va soya nusxasi bilan --- */
+  const d = Math.max(0.55, lw*0.55);
+  /* Vektor eksportida (SVG/DXF/EPS) yorug'-soya nusxalari CHIZILMAYDI:
+     ular ekranda o'yma taassurotini beradi, lekin lazer uchun bu HAR
+     CHIZIQNI UCH MARTA kesish degani — material kuyadi va ish vaqti uch
+     barobar oshadi. SvgCtx o'zini ctx._svg bilan tanitadi. */
+  const vec = !!ctx._svg;
+  const relief = (path, wid)=>{
+    if(!vec){
+      ctx.save(); ctx.translate(-d, -d); ctx.beginPath(); path(); st(ctx, light, wid); ctx.restore();
+      ctx.save(); ctx.translate( d,  d); ctx.beginPath(); path(); st(ctx, dark,  wid); ctx.restore();
+    }
+    ctx.beginPath(); path(); st(ctx, c0, wid);
+  };
+
+  /* --- 1) NUQTALI FON — o'yilgan pastki qatlam ---
+     Bu SIRT FAKTURASI, kesish konturi emas. Vektor eksportida chizilmaydi:
+     aks holda lazerga minglab mayda doira (har biri alohida teshik) ketardi —
+     o'lchandi: 180x120 mm o'yma panelda 3019 kontur, 2.5 MB DXF. */
+  if(!vec && p.dens > 0.15){
+    ctx.save();
+    ctx.beginPath(); oymaCartouche(ctx, iw, ih); ctx.clip();
+    const step = Math.max(R*0.026, R*0.055*(1.15 - p.dens));
+    const rr = Math.max(0.5, step*0.17);
+    /* deterministik siljish — Math.random ishlatilmaydi, aks holda har
+       chizishda boshqa natija chiqib, eksport takrorlanmas bo'lib qolardi */
+    const jit = (i,j)=>{ const s = Math.sin(i*127.1 + j*311.7)*43758.5453; return s - Math.floor(s); };
+    for(let j = -Math.ceil(ih/step); j <= Math.ceil(ih/step); j++){
+      for(let i = -Math.ceil(iw/step); i <= Math.ceil(iw/step); i++){
+        const x = i*step + (j%2 ? step*0.5 : 0) + (jit(i,j)-0.5)*step*0.28;
+        const y = j*step + (jit(j,i)-0.5)*step*0.28;
+        ctx.beginPath(); circle(ctx, x, y, rr); fillHard(ctx, shade(c2, 0.30), 0.55);
+      }
+    }
+    ctx.restore();
+  }
+
+  /* --- 2) MARKAZIY KOMPOZITSIYA — o'qqa nisbatan ko'zgu-simmetrik ---
+     Tuzilma: har yon tomonda ILON-IZI NOVDA pastdan tepaga o'tadi, uning
+     har burilishida palmetta, oralarida barglar. Novda panel enining
+     deyarli hammasini egallagani uchun maydon TEKIS to'ladi.
+
+     (Avvalgi urinishda har tugundan logarifmik spiral chiqarilgandi: katta
+     L da spiralning tashqi o'rami yirik halqaga aylanib, panel o'rtasida
+     chalkash tugun hosil qilardi, yon tomonlar esa bo'sh qolardi. Ilon-izi
+     novda bu muammoni butunlay yo'q qiladi.) */
+  const waves = 3 + Math.min(2, Math.max(0, (p.cmp|0) - 3));
+  const half = (sgn)=>{
+    ctx.save(); ctx.scale(sgn, 1);
+
+    /* --- ilon-izi novda --- */
+    const vine = [];
+    const N = 120;
+    for(let i = 0; i <= N; i++){
+      const t = i/N;                                   /* 0 → pastdan tepaga */
+      const y = -ih*0.86 + t*ih*1.72;
+      /* novda o'qni KESIB O'TMAYDI: aks holda ikki ko'zgu nusxa markazda
+         chalkashib, tugun hosil qilardi */
+      const x = iw*0.16 + (0.5 + 0.5*Math.sin(t*Math.PI*waves - Math.PI/2))*iw*0.62;
+      vine.push([x, y]);
+    }
+    relief(()=>smoothPath(ctx, vine, false), lw*1.15);
+
+    /* burilish nuqtalari — palmetta va qarshi gajak */
+    for(let w = 0; w < waves; w++){
+      const t = (w + 0.5)/waves;                       /* to'lqin cho'qqisi */
+      const i = Math.round(t*N);
+      const a = vine[Math.max(0,i-1)], b2 = vine[Math.min(N,i+1)];
+      const ang = Math.atan2(b2[1]-a[1], b2[0]-a[0]);
+      const q = vine[i];
+      /* palmetta TASHQARIGA qaragan — o'q tomonga emas, aks holda ikki
+         ko'zgu nusxaning palmettalari markazda ustma-ust tushadi */
+      budAt(ctx, q[0], q[1], 0, iw*0.30, c1, c0, lw*0.9);
+    }
+
+    /* novda bo'ylab barglar — ikki tomonga navbatma-navbat */
+    const step = Math.max(5, 13 - Math.round(p.dens*7));
+    for(let i = step; i < N - step; i += step){
+      const a = vine[i-1], b2 = vine[i+1], q = vine[i];
+      const ang = Math.atan2(b2[1]-a[1], b2[0]-a[0]);
+      const side = (Math.floor(i/step) % 2) ? 1 : -1;
+      fineLeaf(ctx, q[0], q[1], ang + side*Math.PI/2.3, iw*0.20, iw*0.068, c1, dark, lw*0.42);
+    }
+    ctx.restore();
+  };
+  half(1); half(-1);
+
+  /* o'q bo'ylab ingichka poya — ikki novdani bog'laydi */
+  const spine = [];
+  for(let i = 0; i <= 24; i++) spine.push([0, -ih*0.88 + (i/24)*ih*1.76]);
+  relief(()=>smoothPath(ctx, spine, false), lw*0.8);
+
+  /* uchlardagi kurtaklar va markaziy palmetta */
+  budAt(ctx, 0,  ih*0.90, -Math.PI/2, ih*0.13, c1, c0, lw);
+  budAt(ctx, 0, -ih*0.90,  Math.PI/2, ih*0.13, c1, c0, lw);
+  for(const s2 of [-1, 1]){
+    fineLeaf(ctx, 0, 0, s2>0 ? 0 : Math.PI, iw*0.34, iw*0.13, c1, dark, lw*0.55);
+    fineLeaf(ctx, 0, 0, s2>0 ? -Math.PI/2 : Math.PI/2, iw*0.22, iw*0.085, c3, dark, lw*0.45);
+  }
+  ctx.beginPath(); circle(ctx, 0, 0, iw*0.075); fillHard(ctx, c3, 0.95); st(ctx, dark, lw*0.7);
+
+  /* --- 3) KARTUSH RAMKASI — eng ustida, relyef bilan --- */
+  relief(()=>oymaCartouche(ctx, iw, ih), lw*0.9);
+  relief(()=>oymaCartouche(ctx, hw, hh), lw*1.35);
+  /* ramka ichidagi ingichka yo'l */
+  ctx.beginPath(); oymaCartouche(ctx, (hw+iw)/2, (hh+ih)/2); st(ctx, c2, lw*0.55);
 }
 
 /* Rumi motivi — ilmoqli buralgan barg (klassik "yaprak") */
@@ -2537,18 +2724,28 @@ function drawXitoy(ctx,R,p,sw,c0,c1,c2,c3){
       const rot = ((gx+gy)%4) * Math.PI/2 + p.skew*0.4;
       ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
       ctx.beginPath();
-      ctx.moveTo(0,-tLen); ctx.lineTo(0,tLen*0.2);
+      /* T ning oyog'i katak CHEGARASIGACHA boradi — panjara bilan
+         tutashadi. Ilgari u faqat tLen gacha chizilar va motiv katak
+         ichida "suzib" qolardi: naqsh uzilgan ko'rinardi, lazerda
+         kesilganda esa bunday bo'lak paneldan tushib ketardi. */
+      ctx.moveTo(0,-s/2); ctx.lineTo(0,tLen*0.2);
       ctx.moveTo(-tBar,tLen*0.2); ctx.lineTo(tBar,tLen*0.2);
       ctx.moveTo(-tBar,tLen*0.2); ctx.lineTo(-tBar,tLen*0.62);
       ctx.moveTo(tBar,tLen*0.2); ctx.lineTo(tBar,tLen*0.62);
       ctx.restore();
       st(ctx, (gx+gy)%2? c1:c2, sw*0.75);
-      /* burchak qavslari */
+      /* Burchak qavslari — TO'RTALA burchakda, katakdan biroz ichkarida.
+         Ilgari faqat ikki qarama-qarshi burchakda chizilar va ular
+         panjara chizig'i ustiga tushib, tasodifiy chiziqchalardek
+         ko'rinardi. To'rttasi birgalikda ichki ramka hosil qiladi —
+         xitoy fretworkidagi klassik motiv. */
       if(p.cmp>=4){
         ctx.beginPath();
-        const q=s*0.16;
-        ctx.moveTo(cx-s/2+q*2, cy-s/2); ctx.lineTo(cx-s/2, cy-s/2); ctx.lineTo(cx-s/2, cy-s/2+q*2);
-        ctx.moveTo(cx+s/2-q*2, cy+s/2); ctx.lineTo(cx+s/2, cy+s/2); ctx.lineTo(cx+s/2, cy+s/2-q*2);
+        const q = s*0.15, inn = s*0.06, h2 = s/2 - inn;
+        for(const [sx2, sy2] of [[-1,-1],[1,-1],[1,1],[-1,1]]){
+          const px = cx + sx2*h2, py = cy + sy2*h2;
+          ctx.moveTo(px - sx2*q, py); ctx.lineTo(px, py); ctx.lineTo(px, py - sy2*q);
+        }
         st(ctx,c3,sw*0.6);
       }
     }
@@ -2674,11 +2871,24 @@ function drawHilbert(ctx,R,p,sw,c0,c1,c2,c3){
 /* 33. Spirograph — epitrochoid */
 function drawSpirograph(ctx,R,p,sw,c0,c1,c2,c3){
   const R0 = R*0.62;
-  const kNum = Math.max(1, p.sym - 2), kDen = Math.max(2, p.sym + p.cmp);
-  const r = R0*kNum/kDen;
-  const d = r*(0.5 + p.spir*1.4);
-  const loops = kDen;
-  const steps = 240*Math.min(loops,10);
+  /* Gipotroxoida: r = R0·a/b (a va b o'zaro tub) → egri b ta cho'qqili
+     bo'lib, a ta aylanishdan keyin yopiladi.
+     DIQQAT — DEGENERATSIYA: b = 2a bo'lganda (R0−r)/r = 1 va egri
+     ELLIPSGA aylanadi; d ≈ r bo'lsa esa TO'G'RI CHIZIQQA siqiladi.
+     Eski formulada kNum = sym−2, kDen = sym+cmp edi va standart
+     qiymatlarda (sym 8, cmp 4) aynan kDen = 2·kNum chiqib qolardi —
+     shuning uchun spirograf o'rniga to'g'ri chiziqlar chizilardi.
+     Endi bu holat aniq chetlab o'tiladi. */
+  const gcd = (x, y)=>{ x = Math.abs(x); y = Math.abs(y); while(y){ const t = y; y = x % y; x = t; } return x || 1; };
+  let b = Math.max(3, p.sym | 0);
+  let a = 1 + ((p.cmp | 0) % Math.max(1, b - 1));
+  const g0 = gcd(a, b); a = a/g0; b = b/g0;
+  if(b === 2*a) b += 1;                     /* ellips/chiziqqa aylanmasin */
+  if(a >= b) a = 1;
+  const r = R0*a/b;
+  const d = r*(0.45 + p.spir*1.1);
+  const loops = a;
+  const steps = Math.max(480, 180*b);
   const pts=[];
   let maxR=0;
   for(let i=0;i<=steps;i++){
@@ -3647,6 +3857,7 @@ const PATTERNS = [
   {id:'arabesk',  nm:'Arabesque',    cat:'B', fn:drawArabesque,th:"O'zaro to'qilgan spiral novdalar to'ri, har tutashuvda barg."},
   {id:'scroll',   nm:'Bargli novda', cat:'B', fn:drawScroll,   th:"Asosiy S-egri (kubik Bezier) + navbatlashgan yon barglar; B(t)=Σ C(3,i)(1−t)^(3−i)·t^i·P_i."},
   {id:'medallion',nm:'Medalyon',     cat:'B', fn:drawMedallion,th:"Yulduz + gul + halqa kombinatsiyasi — markaziy murakkab medalyon."},
+  {id:'oyma',     nm:"O'yma panel",   cat:'B', fn:drawOyma,     th:"Yog'och o'ymakorligi kartushi (Xiva/Farg'ona uslubi). Radial medalyon emas — TIK PANEL: yon tomonlari tik, uchlari siniq (ogee) yoy bilan yopilgan ramka; ichida o'qqa nisbatan ko'zgu-simmetrik islimiy novda. Uslubni tanitadigan uch belgi: kartush ramkasi, nuqtali fon (\"chizma\"/pargori — o'yilgan pastki qatlam) va relyef — har kontur ostiga yorug' va soya nusxasi qo'yiladi, shunda naqsh yassi chiziq emas, o'yilgan sirt bo'lib ko'rinadi. Ustun qirralari va eshik tabaqalari aynan shunday panellardan yig'iladi."},
   {id:'gi',       nm:'Girih+Islimiy',   cat:'C', fn:drawGirihIslimiy,   th:"Tashqi qatlam — girih strapwork, ichki qatlam (0.5R) — islimiy spirallar."},
   {id:'sg',       nm:'Shamsa+Girih',    cat:'C', fn:drawShamsaGirih,    th:"Tashqi shamsa medalyoni ichida girih yulduz-tugun."},
   {id:'mi',       nm:'Muqarnas+Islimiy',cat:'C', fn:drawMuqarnasIslimiy,th:"Muqarnas pog'onalari ichida islimiy novdalar."},
@@ -4261,8 +4472,82 @@ function lsSet(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); return true; }
   catch(e){ return false; }
 }
+/* ===========================================================================
+   SAQLANGAN NAQSHLAR — BULUT (Supabase) yoki lokal
+   ---------------------------------------------------------------------------
+   Supabase rejimida va foydalanuvchi kirgan bo'lsa naqshlar `public.patterns`
+   jadvalida saqlanadi: shunda ular BOSHQA QURILMADA ham ochiladi. Aks holda
+   (server sozlanmagan yoki mehmon) — localStorage.
+
+   Xavfsizlik serverda: RLS siyosati `user_id = auth.uid() and is_active()`
+   shartini qo'yadi, ya'ni har kim faqat O'Z naqshlarini ko'radi va
+   o'zgartiradi; bloklangan foydalanuvchi esa hech narsa yoza olmaydi
+   (supabase/schema.sql). Mijozdagi tekshiruvlar faqat qulaylik uchun.
+
+   CLOUD.patterns — jadvalning xotiradagi nusxasi. Interfeys sinxron
+   getSavedList() ni chaqiradi, shuning uchun ro'yxat kirishda bir marta
+   yuklanadi va har o'zgarishdan keyin yangilanadi.
+   =========================================================================== */
+const CLOUD = { patterns:null, loading:false, err:'' };
+function cloudActive(){ return (typeof sbEnabled === 'function') && sbEnabled() && !!AUTH.user; }
+
+function cloudRowToItem(r){
+  return { id:r.id, p:r.params || {}, thumb:r.thumb || '', t:Date.parse(r.created_at) || Date.now() };
+}
+async function cloudLoadPatterns(){
+  if(!cloudActive()){ CLOUD.patterns = null; return; }
+  CLOUD.loading = true; CLOUD.err = '';
+  try{
+    const { data, error } = await AUTH.client
+      .from('patterns')
+      .select('id, params, thumb, created_at')
+      .order('created_at', { ascending:false })
+      .limit(200);
+    if(error) throw error;
+    CLOUD.patterns = (data || []).map(cloudRowToItem);
+  }catch(e){
+    console.error('[cloud] load', e);
+    CLOUD.err = (e && e.message) || 'yuklab bo\'lmadi';
+    CLOUD.patterns = CLOUD.patterns || [];
+  }
+  CLOUD.loading = false;
+}
+async function cloudSavePattern(item){
+  const { data, error } = await AUTH.client
+    .from('patterns')
+    .insert({ user_id: AUTH.user.id, name: (item.p && item.p.type) || null,
+              params: item.p, thumb: item.thumb })
+    .select('id, params, thumb, created_at')
+    .single();
+  if(error) throw error;
+  CLOUD.patterns = CLOUD.patterns || [];
+  CLOUD.patterns.unshift(cloudRowToItem(data));
+  return true;
+}
+async function cloudDeletePattern(id){
+  const { error } = await AUTH.client.from('patterns').delete().eq('id', id);
+  if(error) throw error;
+  CLOUD.patterns = (CLOUD.patterns || []).filter(x=>x.id !== id);
+  return true;
+}
+/* Mehmon sifatida yasalgan naqshlar kirishda YO'QOLMASIN — bir marta
+   bulutga ko'chiriladi va lokal ro'yxat tozalanadi. */
+async function cloudMigrateGuest(){
+  if(!cloudActive()) return 0;
+  let guest = [];
+  try{ guest = lsGet('naqsh_saved', []) || []; }catch(e){}
+  if(!guest.length) return 0;
+  let n = 0;
+  for(const it of guest.slice(0, 48)){
+    try{ await cloudSavePattern(it); n++; }catch(e){ console.error('[cloud] migrate', e); break; }
+  }
+  if(n){ try{ localStorage.removeItem('naqsh_saved'); }catch(e){} }
+  return n;
+}
+
 /* Saqlangan naqshlar: kirgan foydalanuvchining hisobida, aks holda mehmon ro'yxatida */
 function getSavedList(){
+  if(cloudActive()) return CLOUD.patterns || [];
   const u = (typeof currentUser==='function') ? currentUser() : null;
   if(u){ const users = usersGet(); return (users[u.login] && users[u.login].patterns) || []; }
   return lsGet('naqsh_saved', []);
@@ -4274,6 +4559,39 @@ function setSavedList(arr){
     if(users[u.login]){ users[u.login].patterns = arr; return usersSet(users); }
   }
   return lsSet('naqsh_saved', arr);
+}
+/* Yon paneldagi PROFIL KARTASI — kim kirgan va naqshlar qayerda saqlanmoqda.
+   Nomi renderProfileCard: pastda profil OYNASI uchun renderProfile() bor va
+   ikkinchi e'lon birinchisini bosib ketardi (funksiya deklaratsiyasi
+   ko'tariladi) — shu sababli karta umuman chizilmasdi. */
+function renderProfileCard(){
+  const box = $('profile-box');
+  if(!box) return;
+  const u = (typeof currentUser === 'function') ? currentUser() : null;
+  if(!u){
+    box.innerHTML = '<div class="prof"><div class="prof-av">?</div><div class="prof-i">' +
+      '<div class="prof-n">Mehmon</div>' +
+      '<div class="prof-m">Naqshlar faqat shu brauzerda saqlanadi</div>' +
+      '<span class="prof-b local">lokal</span></div></div>';
+    return;
+  }
+  const cloud = cloudActive();
+  const initials = (u.name || u.login || '?').trim().charAt(0).toUpperCase();
+  const prov = u.provider === 'google' ? 'Google' : 'Email';
+  const n = getSavedList().length;
+  const since = u.created ? new Date(u.created).toLocaleDateString('uz-UZ') : '';
+  box.innerHTML =
+    '<div class="prof">' +
+      '<div class="prof-av">' + escHTML(initials) + '</div>' +
+      '<div class="prof-i">' +
+        '<div class="prof-n">' + escHTML(u.name || u.login) + '</div>' +
+        '<div class="prof-m">' + escHTML(u.login) + ' · ' + prov +
+          (since ? ' · ' + escHTML(since) : '') + '</div>' +
+        '<span class="prof-b ' + (cloud ? 'cloud' : 'local') + '">' +
+          (cloud ? '☁️ hisobda saqlanadi' : 'shu qurilmada') +
+        '</span> <span class="prof-b">' + n + ' ta naqsh</span>' +
+      '</div>' +
+    '</div>';
 }
 function renderGallery(){
   const grid = $('gal-grid'), empty = $('gal-empty');
@@ -4295,6 +4613,15 @@ function renderGallery(){
     del.setAttribute('aria-label','O\'chirish');
     del.addEventListener('click', (e)=>{
       e.stopPropagation();
+      if(cloudActive() && item.id !== undefined){
+        cloudDeletePattern(item.id)
+          .then(()=>{ renderGallery(); ntf('Naqsh o\'chirildi', 'ok'); })
+          .catch(err=>{
+            console.error('[cloud] delete', err);
+            ntf('O\'chirib bo\'lmadi: ' + ((err && err.message) || 'noma\'lum'), 'err');
+          });
+        return;
+      }
       const arr = getSavedList();
       arr.splice(idx,1);
       setSavedList(arr);
@@ -4310,6 +4637,7 @@ function renderGallery(){
     });
     grid.appendChild(d);
   });
+  renderProfileCard();
 }
 function saveCurrent(){
   const off = document.createElement('canvas');
@@ -4321,9 +4649,24 @@ function saveCurrent(){
     octx.fillRect(0,0,144,144);
     drawPattern(octx, 72, 72, 66, P);
   }
-  const arr = getSavedList();
   const snap = {...P}; delete snap._bg;
-  arr.unshift({p:snap, thumb: off.toDataURL('image/png'), t:Date.now()});
+  /* Ko'rinish rasmi JPEG (0.85) — galereyada farqi bilinmaydi, lekin hajmi
+     PNG dan ~3.6 barobar kichik (o'lchandi: 38.9 KB → 10.9 KB). Bulutda bu
+     to'g'ridan-to'g'ri sig'imga aylanadi: bepul 500 MB da ~273 o'rniga
+     ~975 to'la foydalanuvchi. Fon baribir to'ldirilgani uchun JPEG da
+     shaffoflik yo'qligi muammo emas. */
+  const item = { p:snap, thumb: off.toDataURL('image/jpeg', 0.85), t:Date.now() };
+  if(cloudActive()){
+    cloudSavePattern(item)
+      .then(()=>{ renderGallery(); ntf('Naqsh hisobingizga saqlandi ☁️', 'ok'); })
+      .catch(e=>{
+        console.error('[cloud] save', e);
+        ntf('Bulutga saqlab bo\'lmadi: ' + ((e && e.message) || 'noma\'lum'), 'err');
+      });
+    return;
+  }
+  const arr = getSavedList();
+  arr.unshift(item);
   if(arr.length > 48) arr.length = 48;
   if(setSavedList(arr)){
     renderGallery();
@@ -4448,25 +4791,35 @@ function cmdsToD(cmds){
   }
   return d.trim();
 }
-function recordPattern(){
+/* Naqshni vektor sifatida yozib olish.
+   bw × bh — taxta o'lchami ICHKI birlikda (uzun tomon 1000).
+   fill:
+     'tile'  — naqsh butun yuzani to'ldiradi (tessellatsiya);
+     'medal' — markazda doira medalyon (eski xatti-harakat).
+   Ilgari faqat 500,500,470 — ya'ni HAR DOIM kvadrat taxtadagi DOIRA edi,
+   shuning uchun foydalanuvchi qanday o'lcham tanlasa ham doira chiqardi. */
+function recordPattern(bw, bh, fill){
+  bw = bw || 1000; bh = bh || bw;
   const fake = new SvgCtx();
   const saveTess = TESS.on;
-  drawPattern(fake, 500, 500, 470, P);
+  if(fill === 'medal'){
+    drawPattern(fake, bw/2, bh/2, Math.min(bw, bh)*0.47, P);
+  } else {
+    TESS.on = true;
+    drawTessellation(fake, bw, bh, P);
+  }
   TESS.on = saveTess;
   return fake.paths;
 }
-/* SVG (CorelDraw): faqat kubik Bezier C buyruqlari, hairline qizil kontur */
-function buildSVG(){
-  const paths = recordPattern();
-  let out = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 1000 1000">\n' +
-    '<g stroke="#ff0000" stroke-width="0.072" fill="none" stroke-linecap="round" stroke-linejoin="round">\n';
-  for(const pth of paths){
-    const d = cmdsToD(pth.cmds);
-    if(d) out += '<path d="' + d + '"/>\n';
-  }
-  out += '</g>\n</svg>';
-  return out;
+/* Fizik o'lchamdan ichki taxta o'lchamini chiqarish: uzun tomon 1000
+   birlik, kalta tomon nisbatan. Shunday qilinsa naqsh chizish miqyosi
+   avvalgidek qoladi (kvadrat 100 mm da aynan 1000×1000), lekin
+   to'rtburchak o'lchamlar ham to'g'ri chiqadi. */
+function boardFor(wMm, hMm){
+  const S = 1000;
+  const w = Math.max(1, wMm || 100), h = Math.max(1, hMm || w);
+  const mx = Math.max(w, h);
+  return { bw: S*w/mx, bh: S*h/mx, k: mx/S };   /* k — birlik → mm */
 }
 /* Bezier → 32 nuqtali tabaqalash */
 function flattenCmds(cmds){
@@ -4484,8 +4837,18 @@ function flattenCmds(cmds){
     } else if(c[0]==='C'){
       if(!cur) cur = {pts:[[sx,sy]], closed:false};
       const p0=[sx,sy], p1=[c[1],c[2]], p2=[c[3],c[4]], p3=[c[5],c[6]];
-      for(let i=1;i<=32;i++){
-        cur.pts.push(cubicAt(p0,p1,p2,p3,i/32));
+      /* Adaptiv tabaqalash: segmentlar soni egri chiziq uzunligidan
+         chiqadi. Ilgari har egri qat'iy 32 bo'lakka bo'linardi — mayda
+         egrilarda bu keraksiz nuqtalar (fayl hajmi va ishlov vaqti),
+         yirik egrilarda esa aniqlik yetmasligi mumkin edi.
+         n ≈ √(2·L) da xato ≈ L/(8n²) ≈ 1/16 birlik = 100 mm detalda
+         0.006 mm — lazer aniqligidan ancha mayda. */
+      const L = Math.hypot(p1[0]-p0[0], p1[1]-p0[1]) +
+                Math.hypot(p2[0]-p1[0], p2[1]-p1[1]) +
+                Math.hypot(p3[0]-p2[0], p3[1]-p2[1]);
+      const n = Math.max(3, Math.min(32, Math.ceil(Math.sqrt(2*L))));
+      for(let i=1;i<=n;i++){
+        cur.pts.push(cubicAt(p0,p1,p2,p3,i/n));
       }
       sx=c[5]; sy=c[6];
     } else if(c[0]==='Z'){
@@ -4589,10 +4952,22 @@ function clipPolys(polys, R){
 /* bir xil konturlarni bittaga tushirish — kalit nuqtalar to'plamidan
    yasaladi, shuning uchun yo'nalish va boshlang'ich nuqtaga bog'liq emas */
 function dedupePolys(polys){
+  /* Kalit nuqtalar TO'PLAMIdan yasaladi (yig'indi va XOR — ikkalasi ham
+     tartibdan mustaqil), shuning uchun yo'nalish va boshlang'ich nuqtaga
+     bog'liq emas. Ilgari bu yerda har kontur uchun matn massivi qurilib
+     saralanardi — zich naqshlarda eksportning asosiy sekinlik sababi
+     shu edi. */
   const seen = new Set(), out = [];
   for(const pl of polys){
-    const key = (pl.closed ? 'C' : 'O') + pl.pts.length + '|' +
-      pl.pts.map(q => (Math.round(q[0]*100)/100) + ',' + (Math.round(q[1]*100)/100)).sort().join(';');
+    let h1 = 0, h2 = 0;
+    for(const q of pl.pts){
+      const a = Math.round(q[0]*100) | 0, b = Math.round(q[1]*100) | 0;
+      let v = (Math.imul(a, 73856093) ^ Math.imul(b, 19349663)) >>> 0;
+      v = (v ^ (v >>> 13)) >>> 0;
+      h1 = (h1 + v) >>> 0;
+      h2 = (h2 ^ v) >>> 0;
+    }
+    const key = (pl.closed ? 'C' : 'O') + pl.pts.length + '|' + h1 + '|' + h2;
     if(seen.has(key)) continue;
     seen.add(key);
     out.push(pl);
@@ -4674,14 +5049,15 @@ function mergeOverlaps(polys){
    ustma-ust kesmalarni birlashtirish → mayda parchalarni olib tashlash.
    Oxirgi bosqich: qirqishdan qolgan 0.3 mm dan qisqa parchalar lazerda
    kesma emas, KUYGAN NUQTA beradi (kerf o'zi ~0.1–0.2 mm). */
-function laserPolys(sizeMm){
+function laserPolys(wMm, hMm, fill){
+  const B = boardFor(wMm, hMm);
+  const board = { x0:0, y0:0, x1:B.bw, y1:B.bh };
   const polys = [];
-  for(const pth of recordPattern()){
+  for(const pth of recordPattern(B.bw, B.bh, fill)){
     for(const pl of flattenCmds(pth.cmds)) if(pl.pts.length > 1) polys.push(pl);
   }
-  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, BOARD)));
-  const mm = (sizeMm && sizeMm > 0) ? sizeMm : 100;
-  const minU = 0.3*1000/mm;                     /* 0.3 mm — birlikda */
+  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, board)));
+  const minU = 0.3/B.k;                         /* 0.3 mm — birlikda */
   return merged.filter(pl=>{
     let L = 0;
     for(let i = 1; i < pl.pts.length; i++)
@@ -4694,51 +5070,119 @@ function laserPolys(sizeMm){
 
 /* DXF AC1015 (AutoCAD 2000), $INSUNITS=4 (mm). sizeMm — chetma-chet o'lcham.
    Konturlar yopiq LWPOLYLINE sifatida chiqadi (lazer uchun shart). */
-function buildDXF(sizeMm){
-  const polys = laserPolys(sizeMm);
-  let handle = 0x100;
-  const hx = ()=> (handle++).toString(16).toUpperCase();
+/* ---------------------------------------------------------------------------
+   DXF — R12 (AC1009)
+   ---------------------------------------------------------------------------
+   Ilgari AC1015 (AutoCAD 2000) va LWPOLYLINE ishlatilardi. Lazer
+   apparatlarining import moduli ko'pincha ANCHA ESKI bo'ladi va faqat R12 ni
+   to'liq o'qiydi: LWPOLYLINE R14 dan boshlab paydo bo'lgan, handle (5) va
+   AcDbEntity sinf belgilari esa R13+ ga tegishli — eski o'qigich ularda
+   to'xtaydi yoki bo'sh chizma ochadi.
+   R12 — eng past umumiy maxraj: uni R12 dan keyingi HAMMA dastur o'qiydi.
+   Shuning uchun bu yerda POLYLINE/VERTEX/SEQEND ishlatiladi, handle va
+   sinf belgilari yo'q.
+   --------------------------------------------------------------------------- */
+function buildDXF(wMm, hMm, fill){
+  const B = boardFor(wMm, hMm);
+  const polys = laserPolys(wMm, hMm, fill);
   const L = [];
   const push = (...a)=>{ for(const x of a) L.push(x); };
-  /* HEADER */
+  const MM = B.k;                                   /* ichki birlik → mm */
+  const BH = B.bh;
+  const W = B.bw*MM, H = BH*MM;
+
+  /* HEADER — o'lchov birligi metrik ekani ikki xil kalit bilan aytiladi:
+     $INSUNITS (R13+) va $MEASUREMENT (R12 o'qigichlari shuni qaraydi) */
   push('0','SECTION','2','HEADER',
-       '9','$ACADVER','1','AC1015',
+       '9','$ACADVER','1','AC1009',
        '9','$INSUNITS','70','4',
-       '9','$HANDSEED','5','FFFF',
+       '9','$MEASUREMENT','70','1',
+       '9','$EXTMIN','10','0.0','20','0.0','30','0.0',
+       '9','$EXTMAX','10',num(W),'20',num(H),'30','0.0',
        '0','ENDSEC');
-  /* TABLES */
+
+  /* TABLES — R12 shaklida: handle yo'q, sinf belgisi yo'q */
   push('0','SECTION','2','TABLES');
-  push('0','TABLE','2','LTYPE','5',hx(),'100','AcDbSymbolTable','70','1',
-       '0','LTYPE','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLinetypeTableRecord',
-       '2','CONTINUOUS','70','0','3','Solid line','72','65','73','0','40','0.0',
+  push('0','TABLE','2','LTYPE','70','1',
+       '0','LTYPE','2','CONTINUOUS','70','0','3','Solid line','72','65','73','0','40','0.0',
        '0','ENDTAB');
-  push('0','TABLE','2','LAYER','5',hx(),'100','AcDbSymbolTable','70','2',
-       '0','LAYER','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLayerTableRecord',
-       '2','Naqsh','70','0','62','1','6','CONTINUOUS',
-       '0','LAYER','5',hx(),'100','AcDbSymbolTableRecord','100','AcDbLayerTableRecord',
-       '2','Chegara','70','0','62','7','6','CONTINUOUS',
+  push('0','TABLE','2','LAYER','70','2',
+       '0','LAYER','2','Naqsh','70','0','62','1','6','CONTINUOUS',
+       '0','LAYER','2','Chegara','70','0','62','7','6','CONTINUOUS',
        '0','ENDTAB');
   push('0','ENDSEC');
-  /* BLOCKS (bo'sh) */
   push('0','SECTION','2','BLOCKS','0','ENDSEC');
+
   /* ENTITIES */
   push('0','SECTION','2','ENTITIES');
-  const MM = (sizeMm && sizeMm > 0 ? sizeMm : 100) / 1000;  /* viewBox 1000 → sizeMm */
   const emitPoly = (pts, closed, layer)=>{
-    push('0','LWPOLYLINE','5',hx(),'100','AcDbEntity','8',layer,'100','AcDbPolyline',
-         '90', String(pts.length), '70', closed ? '1' : '0');
+    push('0','POLYLINE','8',layer,'66','1','70', closed ? '1' : '0',
+         '10','0.0','20','0.0','30','0.0');
     for(const q of pts){
       /* DXF y o'qi yuqoriga qaragan — shuning uchun ag'dariladi */
-      push('10', num(q[0]*MM), '20', num((1000-q[1])*MM));
+      push('0','VERTEX','8',layer,
+           '10', num(q[0]*MM), '20', num((BH-q[1])*MM), '30','0.0');
     }
+    push('0','SEQEND','8',layer);
   };
-  /* chegara to'rtburchak — lazer stolida joylashtirish uchun */
-  emitPoly([[0,0],[1000,0],[1000,1000],[0,1000]], true, 'Chegara');
+  emitPoly([[0,0],[B.bw,0],[B.bw,BH],[0,BH]], true, 'Chegara');
   for(const pl of polys){
     if(pl.pts.length > 1) emitPoly(pl.pts, pl.closed, 'Naqsh');
   }
   push('0','ENDSEC','0','EOF');
-  return L.join('\n');
+  return L.join('\r\n') + '\r\n';   /* R12 o'qigichlari CRLF ni kutadi */
+}
+
+/* ---------------------------------------------------------------------------
+   EPS — Encapsulated PostScript
+   ---------------------------------------------------------------------------
+   Lazer apparatlarining import ro'yxatida EPS odatda BIRINCHI turadi va eng
+   ishonchli format: u oddiy MATN, ichida faqat to'g'ri chiziqlar va
+   moveto/lineto buyruqlari bo'ladi.
+   Birlik — PostScript punkti (1 pt = 1/72 dyuym = 0.352778 mm), shuning
+   uchun mm → pt: ×72/25.4. BoundingBox aynan detal o'lchamiga teng.
+   --------------------------------------------------------------------------- */
+function buildEPS(wMm, hMm, opts){
+  opts = opts || {};
+  const B = boardFor(wMm, hMm);
+  const polys = laserPolys(wMm, hMm, opts.fill);
+  const K = B.k*72/25.4;                 /* ichki birlik → punkt */
+  const BH = B.bh;
+  const Wp = B.bw*K, Hp = BH*K;
+  const kerf = (opts.kerf || 0.1)*72/25.4;
+  const n2 = v => (Math.round(v*100)/100).toString();
+  const out = [];
+  out.push('%!PS-Adobe-3.0 EPSF-3.0');
+  out.push('%%Creator: NaqshAI');
+  out.push('%%Title: naqsh ' + wMm + 'x' + hMm + ' mm');
+  out.push('%%BoundingBox: 0 0 ' + Math.ceil(Wp) + ' ' + Math.ceil(Hp));
+  out.push('%%HiResBoundingBox: 0 0 ' + n2(Wp) + ' ' + n2(Hp));
+  out.push('%%DocumentData: Clean7Bit');
+  out.push('%%LanguageLevel: 2');
+  out.push('%%EndComments');
+  out.push('%%BeginProlog');
+  out.push('/m {moveto} bind def /l {lineto} bind def');
+  out.push('/h {closepath} bind def /S {stroke} bind def');
+  out.push('%%EndProlog');
+  out.push('%%Page: 1 1');
+  out.push('gsave');
+  out.push('1 0 0 setrgbcolor');          /* qizil = kesish konturi */
+  out.push(n2(kerf) + ' setlinewidth');
+  out.push('1 setlinecap 1 setlinejoin');
+  const emit = (pts, closed)=>{
+    if(pts.length < 2) return;
+    let line = 'newpath ' + n2(pts[0][0]*K) + ' ' + n2((BH - pts[0][1])*K) + ' m';
+    for(let i = 1; i < pts.length; i++)
+      line += ' ' + n2(pts[i][0]*K) + ' ' + n2((BH - pts[i][1])*K) + ' l';
+    if(closed) line += ' h';
+    out.push(line + ' S');
+  };
+  if(opts.frame) emit([[0,0],[B.bw,0],[B.bw,BH],[0,BH]], true);
+  for(const pl of polys) emit(pl.pts, pl.closed);
+  out.push('grestore');
+  out.push('%%Trailer');
+  out.push('%%EOF');
+  return out.join('\n') + '\n';
 }
 /* Yuklab olish helper */
 function _dataURLtoBlob(dataURL){
@@ -4767,7 +5211,32 @@ async function _dlBlob(content, mime, filename, successMsg){
         const code = err && err.code;
         if(code === 'declined') return false;
         if(code === 'rejected_extension' || code === 'extension_not_enabled'){
-          ntf("Bu formatni shu ko'rishda yuklab bo'lmaydi — to'liq nashrda ishlaydi", 'err');
+          /* Claude'ning ko'rish oynasi faqat cheklangan ro'yxatdagi
+             kengaytmalarni saqlashga ruxsat beradi (png, jpg, txt, json,
+             md, svg, pdf...). Sanoat formatlari — TIFF, BMP, WIF, DXF —
+             bu ro'yxatda YO'Q. Bu ilovaning kamchiligi emas, ko'rish
+             oynasining cheklovi: haqiqiy saytda hammasi normal yuklanadi.
+             DXF va WIF — MATN fayllar, shuning uchun ularni .txt sifatida
+             saqlab berish mumkin: foydalanuvchi nomini o'zgartirsa bo'ldi. */
+          const ext = (filename.split('.').pop() || '').toLowerCase();
+          if(ext === 'dxf' || ext === 'wif' || ext === 'eps'){
+            try{
+              await downloads.save({ filename: filename + '.txt', data: blob });
+              ntf('Ko\'rish oynasi .' + ext + ' ni saqlay olmaydi — fayl «' +
+                  filename + '.txt» nomi bilan saqlandi. Nomidagi oxirgi ' +
+                  '«.txt» ni o\'chiring, ichidagisi to\'liq to\'g\'ri.', 'ok');
+              return true;
+            }catch(e2){ if(e2 && e2.code === 'declined') return false; }
+          }
+          ntf('Bu formatni Claude ko\'rish oynasida saqlab bo\'lmaydi (faqat ' +
+              'png/jpg/txt/pdf kabi turlar mumkin). Sanoat fayllari uchun ' +
+              'ilovani o\'z saytingizdan oching — u yerda TIFF, BMP, WIF va ' +
+              'DXF normal yuklanadi.', 'err');
+          return false;
+        }
+        if(code === 'too_large'){
+          ntf('Fayl juda katta (16 MB dan ortiq) — kichikroq rapport yoki ' +
+              'past chuqurlik tanlang', 'err');
           return false;
         }
         ntf('Yuklab olishda xato: ' + (err && err.message || code || "noma'lum"), 'err');
@@ -4842,21 +5311,28 @@ function pngSetDPI(bytes, dpi){
   out.set(bytes.subarray(ihdrEnd), ihdrEnd + 21);
   return out;
 }
-function exportPNG(size, dpi, transparent, cb){
+function exportPNG(w, h, dpi, transparent, cb, fill){
+  w = Math.max(16, w|0); h = Math.max(16, h|0) || w;
   const off = document.createElement('canvas');
-  off.width = off.height = size;
+  off.width = w; off.height = h;
   const octx = off.getContext('2d');
   if(!octx){ ntf('Canvas yaratib bo\'lmadi', 'err'); return; }
   const pal = PAL[P.pal] || PAL.gold;
   P._bg = pal.bg;
   if(!transparent){
     octx.fillStyle = pal.bg;
-    octx.fillRect(0,0,size,size);
+    octx.fillRect(0, 0, w, h);
   }
-  if(TESS.on){
-    drawTessellation(octx, size, size, P);
+  /* 'tile' — butun yuzani to'ldiradi (to'rtburchakda ham to'g'ri ishlaydi),
+     'medal' — markazda doira medalyon. Ilgari bu tanlov yo'q edi va
+     tessellatsiya o'chirilgan bo'lsa har doim doira chiqardi. */
+  const doTile = (fill === 'medal') ? false : (fill === 'tile' ? true : TESS.on);
+  if(doTile){
+    const saveTess = TESS.on; TESS.on = true;
+    drawTessellation(octx, w, h, P);
+    TESS.on = saveTess;
   } else {
-    drawPattern(octx, size/2, size/2, size*0.46, P);
+    drawPattern(octx, w/2, h/2, Math.min(w, h)*0.46, P);
   }
   if(off.toBlob){
     off.toBlob(async b=>{
@@ -4866,8 +5342,9 @@ function exportPNG(size, dpi, transparent, cb){
         const withDpi = pngSetDPI(new Uint8Array(await b.arrayBuffer()), dpi);
         blob = new Blob([withDpi], {type:'image/png'});
       }catch(e){ console.warn('[png] pHYs qo\'shilmadi', e); }
-      _dlBlob(blob, 'image/png', 'naqsh_'+P.type+'_'+size+'px_'+dpi+'dpi.png',
-              'PNG yuklab olindi 📥 — ' + dpi + ' dpi, ' + (size/dpi*25.4).toFixed(0) + ' mm');
+      _dlBlob(blob, 'image/png', 'naqsh_'+P.type+'_'+w+'x'+h+'px_'+dpi+'dpi.png',
+              'PNG yuklab olindi 📥 — ' + w + '×' + h + ' px, ' + dpi + ' dpi, ' +
+              (w/dpi*25.4).toFixed(0) + '×' + (h/dpi*25.4).toFixed(0) + ' mm');
       if(cb) cb();
     }, 'image/png');
   } else {
@@ -5436,44 +5913,47 @@ function buildWIF(grid, w, h, meta){
 /* ---------------------------------------------------------------------------
    LAZER: DXF va SVG — haqiqiy mm o'lchamida, yopiq konturlar bilan
    --------------------------------------------------------------------------- */
-function buildLaserSVG(sizeMm, opts){
+function buildLaserSVG(wMm, hMm, opts){
   opts = opts || {};
-  const S = 1000;                       /* ichki koordinata tizimi */
+  const B = boardFor(wMm, hMm);
   const kerf = opts.kerf || 0.1;        /* hairline — lazer dasturlari kesish deb tanidi */
   let out = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<!-- NaqshAI — lazer kesish uchun. Qizil = kesish konturi. O\'lcham: ' + sizeMm + '×' + sizeMm + ' mm -->\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" width="' + sizeMm + 'mm" height="' + sizeMm + 'mm" ' +
-    'viewBox="0 0 ' + S + ' ' + S + '">\n' +
-    '<g id="kesish" stroke="#ff0000" stroke-width="' + (kerf*S/sizeMm).toFixed(3) + '" fill="none" ' +
+    '<!-- NaqshAI — lazer kesish uchun. Qizil = kesish konturi. O\'lcham: ' +
+      wMm + '×' + hMm + ' mm -->\n' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + wMm + 'mm" height="' + hMm + 'mm" ' +
+    'viewBox="0 0 ' + num(B.bw) + ' ' + num(B.bh) + '">\n' +
+    '<g id="kesish" stroke="#ff0000" stroke-width="' + (kerf/B.k).toFixed(3) + '" fill="none" ' +
     'stroke-linecap="round" stroke-linejoin="round">\n';
   /* Taxta ichidagi yo'llar Bezier ko'rinishida qoladi (CorelDraw'da
      tahrirlash uchun silliqroq), chegaradan chiqadiganlari qirqilgan
      poliliniya sifatida chiqadi — DXF bilan aynan bir xil detal bo'lsin. */
-  for(const pl of laserPolys(sizeMm)){
+  for(const pl of laserPolys(wMm, hMm, opts.fill)){
     out += '<path d="M' + pl.pts.map(q => num(q[0]) + ' ' + num(q[1])).join(' L') +
            (pl.closed ? ' Z' : '') + '"/>\n';
   }
   if(opts.frame){
-    out += '<rect x="0" y="0" width="' + S + '" height="' + S + '"/>\n';
+    out += '<rect x="0" y="0" width="' + num(B.bw) + '" height="' + num(B.bh) + '"/>\n';
   }
   out += '</g>\n</svg>';
   return out;
 }
 
 const EXP = { format:'png', size:2048, dpi:300, trans:false,
-              jqsize:512, jqgroup:'p4', jqdepth:1, mm:100, invert:false };
+              jqsize:512, jqgroup:'p4', jqdepth:1, mm:100, invert:false,
+              fill:'tile' };
 
 /* Format tanlanganda qaysi sozlama guruhlari ko'rinishini boshqaradi */
 function expSyncGroups(){
   const f = EXP.format;
   const isRaster  = (f === 'png');
   const isJq      = (f === 'tiff' || f === 'bmp' || f === 'wif');
-  const isVector  = (f === 'svg' || f === 'dxf');
+  const isVector  = (f === 'svg' || f === 'dxf' || f === 'eps');
   const show = (id, on) => { const el = $(id); if(el) el.style.display = on ? '' : 'none'; };
   show('grp-size',  isRaster);
   show('grp-trans', isRaster);
   show('grp-jq',    isJq);
   show('grp-mm',    isVector);
+  show('grp-fill',  isRaster || isVector);
   /* WIF faqat 1-bit bo'la oladi — draft ip ko'tarilishidan iborat */
   const dep = $('exp-jqdepth');
   if(dep) dep.style.opacity = (f === 'wif') ? '.45' : '1';
@@ -5590,27 +6070,71 @@ async function exportJacquard(){
   closeExport();
 }
 
+/* Raqamli maydonlardan o'lchamni o'qish — bo'sh yoki noto'g'ri bo'lsa
+   segmentdagi tanlangan qiymatga qaytadi. */
+function expDims(){
+  const rd = (id, def, lo, hi)=>{
+    const el = $(id);
+    if(!el) return def;
+    const v = parseFloat(el.value);
+    if(!isFinite(v)) return def;
+    return Math.min(hi, Math.max(lo, Math.round(v)));
+  };
+  return {
+    mmW: rd('exp-mm-w', EXP.mm, 5, 5000),
+    mmH: rd('exp-mm-h', EXP.mm, 5, 5000),
+    pxW: rd('exp-px-w', EXP.size, 16, 12000),
+    pxH: rd('exp-px-h', EXP.size, 16, 12000),
+    jqc: rd('exp-jq-c', EXP.jqsize, 32, 4096)
+  };
+}
 function doExport(){
   const chk = $('exp-trans');
   EXP.trans = chk ? chk.checked : false;
+  const D = expDims();
   if(EXP.format === 'tiff' || EXP.format === 'bmp' || EXP.format === 'wif'){
+    EXP.jqsize = D.jqc;
     exportJacquard();
     return;
   }
-  if(EXP.format==='png'){
-    exportPNG(EXP.size, EXP.dpi, EXP.trans);
-  } else if(EXP.format==='svg'){
-    const svg = buildLaserSVG(EXP.mm, { frame:true });
-    _dlBlob(svg, 'image/svg+xml', 'naqsh_'+P.type+'_'+EXP.mm+'mm.svg',
-            'SVG yuklab olindi 📥 — ' + EXP.mm + '×' + EXP.mm + ' mm');
+  if(EXP.format === 'png'){
+    exportPNG(D.pxW, D.pxH, EXP.dpi, EXP.trans, null, EXP.fill);
+  } else if(EXP.format === 'svg'){
+    const svg = buildLaserSVG(D.mmW, D.mmH, { frame:true, fill:EXP.fill });
+    _dlBlob(svg, 'image/svg+xml', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.svg',
+            'SVG yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
+  } else if(EXP.format === 'eps'){
+    const eps = buildEPS(D.mmW, D.mmH, { frame:true, fill:EXP.fill });
+    _dlBlob(eps, 'application/postscript', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.eps',
+            'EPS yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
   } else {
-    const dxf = buildDXF(EXP.mm);
-    _dlBlob(dxf, 'application/dxf', 'naqsh_'+P.type+'_'+EXP.mm+'mm.dxf',
-            'DXF (CNC/lazer) yuklab olindi 📥 — ' + EXP.mm + '×' + EXP.mm + ' mm');
+    const dxf = buildDXF(D.mmW, D.mmH, EXP.fill);
+    _dlBlob(dxf, 'application/dxf', 'naqsh_'+P.type+'_'+D.mmW+'x'+D.mmH+'mm.dxf',
+            'DXF (CNC/lazer) yuklab olindi 📥 — ' + D.mmW + '×' + D.mmH + ' mm');
   }
   closeExport();
 }
-function openExport(){ expSyncGroups(); const m = $('modal-export'); if(m) m.classList.add('open'); }
+/* Raqamli maydonlarni EXP dan to'ldirish — oyna ochilganda ular hech qachon
+   tanlangan tugmadan farq qilib qolmasin (ikki manba bo'lsa, qaysi biri
+   fayl o'lchamini belgilagani noaniq bo'lib qoladi). */
+function expSyncInputs(){
+  const set = (id, v)=>{ const el = $(id); if(el && el.value === '') el.value = String(v); };
+  const force = (id, v)=>{ const el = $(id); if(el) el.value = String(v); };
+  const mmw = $('exp-mm-w'), pxw = $('exp-px-w'), jqc = $('exp-jq-c');
+  if(mmw && parseFloat(mmw.value) !== EXP.mm && !mmw.dataset.touched){
+    force('exp-mm-w', EXP.mm); force('exp-mm-h', EXP.mm);
+  }
+  if(pxw && parseFloat(pxw.value) !== EXP.size && !pxw.dataset.touched){
+    force('exp-px-w', EXP.size); force('exp-px-h', EXP.size);
+  }
+  if(jqc && parseFloat(jqc.value) !== EXP.jqsize && !jqc.dataset.touched){
+    force('exp-jq-c', EXP.jqsize);
+  }
+  set('exp-mm-w', EXP.mm); set('exp-mm-h', EXP.mm);
+  set('exp-px-w', EXP.size); set('exp-px-h', EXP.size);
+  set('exp-jq-c', EXP.jqsize);
+}
+function openExport(){ expSyncInputs(); expSyncGroups(); const m = $('modal-export'); if(m) m.classList.add('open'); }
 function closeExport(){ const m = $('modal-export'); if(m) m.classList.remove('open'); }
 /* ============================================================
    3D KO'RISH (Three.js r128)
@@ -5637,6 +6161,536 @@ function planarUV(geo){
   uv.needsUpdate = true;
   return geo;
 }
+/* ===========================================================================
+   ME'MORIY OB'YEKTLAR — ustun, darvoza, peshtoq
+   ---------------------------------------------------------------------------
+   Ko'p qismli guruhlar: har qism o'z materiali va o'z naqsh zichligi bilan.
+
+   NAQSH. Tekstura — HAQIQIY RAPPORT (makeSeamlessRepeat, chok-suzligi 160
+   holatda o'lchangan) + RepeatWrapping. UV diapazoni geometriya turiga qarab
+   har xil (brauzerda o'lchangan):
+       Extrude / Shape          → UV = DUNYO koordinatasi  → repeat = 1/plitka
+       Box / Cylinder / Lathe   → UV = 0..1                → repeat = plitka SONI
+       stripFromOutline         → UV = (yoy uzunligi, chuqurlik)
+   Aylanma yuzalarda u BUTUN son bo'lishi shart — aks holda buyum orqasida
+   ulanish chizig'i chiqadi.
+
+   MIQYOS. Haqiqiy koshinkorlikda modul mayda: 4 birlik enli peshtoqda
+   ~10 ta plitka. Shuning uchun asosiy maydon plitkasi TU = 0.40, bandlar esa
+   o'z enidan kelib chiqadi (bandda aynan bitta plitka yotadi) — naqsh nafis
+   va me'moriy o'lchamga mos chiqadi.
+
+   O'LCHOV. Har ob'yekt asosi LOKAL y = 0 da quriladi va guruh FLOOR_Y ga
+   qo'yiladi, shunda buyum polda turadi.
+   =========================================================================== */
+const ARCH_KINDS = {ustun:1, darvoza:1, peshtoq:1};
+const FLOOR_Y = -1.66;
+const TU = 0.40;                     /* asosiy maydon plitkasi (dunyo birligi) */
+
+function archMat(kind, rx, ry, tint){
+  let m;
+  if(kind === 'stone'){
+    m = new THREE.MeshStandardMaterial({color:0xd6c7a4, roughness:0.86, metalness:0.02});
+  } else if(kind === 'metal'){
+    m = new THREE.MeshStandardMaterial({color:0xa87c34, roughness:0.34, metalness:0.9});
+  } else if(kind === 'dark'){
+    m = new THREE.MeshStandardMaterial({color:0x2a1d10, roughness:0.85, metalness:0.05});
+  } else if(kind === 'wood'){
+    m = T3.matWood.clone();
+  } else {
+    m = T3.mat.clone();
+  }
+  m.side = THREE.FrontSide;
+  if(kind === 'tile' || kind === 'wood'){
+    if(tint !== undefined){
+      m.color = new THREE.Color(tint);
+      /* tinted yuzalar porlab ketmasin — chuqurlik sezilsin */
+      if(m.emissive){ m.emissive = new THREE.Color(tint); m.emissiveIntensity = 0.05; }
+    }
+    m.userData.rep = [rx || 1, (ry === undefined ? rx : ry) || 1];
+    T3.archMats.push(m);
+  }
+  return m;
+}
+
+/* TO'RT MARKAZLI (Temuriylar) SINIQ RAVOQ.
+   (cx + hw)² = cx² + rise²  →  cx = (rise² − hw²)/(2·hw).
+   Ravoq SINIQ bo'lishi uchun rise > hw shart. */
+function archOutline(hw, spring, apex, n){
+  n = n || 48;
+  const rise = apex - spring;
+  const cx = (rise*rise - hw*hw)/(2*hw);
+  const R = cx + hw;
+  const aEnd = Math.atan2(rise, -cx);
+  const pts = [];
+  for(let i = 0; i <= n; i++){
+    const a = Math.PI + (aEnd - Math.PI)*(i/n);
+    pts.push([cx + R*Math.cos(a), spring + R*Math.sin(a)]);
+  }
+  for(let i = n - 1; i >= 0; i--){
+    const a = Math.PI + (aEnd - Math.PI)*(i/n);
+    pts.push([-(cx + R*Math.cos(a)), spring + R*Math.sin(a)]);
+  }
+  return pts;
+}
+
+/* Ravoq atrofidagi bo'rtma band (archivolt) shakli */
+function archBandShape(ow, spring, apex, bw){
+  const outer = archOutline(ow + bw, spring, apex + bw, 44);
+  const inner = archOutline(ow, spring, apex, 44);
+  const sh = new THREE.Shape();
+  sh.moveTo(-(ow + bw), 0);
+  for(const q of outer) sh.lineTo(q[0], q[1]);
+  sh.lineTo(ow + bw, 0);
+  sh.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-ow, 0);
+  for(const q of inner) hole.lineTo(q[0], q[1]);
+  hole.lineTo(ow, 0);
+  hole.closePath();
+  sh.holes.push(hole);
+  return sh;
+}
+
+/* Kontur bo'ylab tunnel yuzasi (ravoq soffiti). UV = (yoy uzunligi, chuqurlik) */
+function stripFromOutline(pts, depth){
+  const g = new THREE.BufferGeometry();
+  const n = pts.length;
+  const pos = [], uv = [], idx = [];
+  let len = 0; const s = [0];
+  for(let i = 1; i < n; i++){
+    len += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    s.push(len);
+  }
+  for(let i = 0; i < n; i++){
+    pos.push(pts[i][0], pts[i][1], 0);
+    pos.push(pts[i][0], pts[i][1], -depth);
+    uv.push(s[i], 0, s[i], depth);
+  }
+  for(let i = 0; i < n - 1; i++){
+    const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+    idx.push(a, b, c, b, d, c);
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/* MUQARNAS KATAGI — botiq chig'anoq (stalaktit).
+   Ilgari kataklar oddiy PARALLELEPIPED edi va muqarnas "g'ishtlar uyumi"dek
+   ko'rinardi. Haqiqiy muqarnas kataklari — kichik yarim gumbazchalar;
+   shuning uchun bu yerda sferaning bir bo'lagi ishlatiladi. */
+function muqCellGeo(r){
+  return new THREE.SphereGeometry(r, 12, 8, -Math.PI/2, Math.PI, 0, Math.PI*0.62);
+}
+
+/* Ustun boshi uchun muqarnas — aylana bo'ylab yaruslar */
+function muqarnasCap(r0, tiers, height, mat){
+  const grp = new THREE.Group();
+  let r = r0, y = 0;
+  const hT = height/tiers;
+  for(let t = 0; t < tiers; t++){
+    const n = 10 + t*4;
+    const cr = Math.min(hT*0.62, TAU*r/n*0.52);
+    const geo = muqCellGeo(cr);
+    for(let i = 0; i < n; i++){
+      const a = TAU*(i + 0.5)/n + (t % 2 ? Math.PI/n : 0);
+      const cell = new THREE.Mesh(geo, mat);
+      cell.position.set(Math.sin(a)*r, y + hT*0.5, Math.cos(a)*r);
+      cell.rotation.y = a;
+      cell.rotation.x = -0.12;
+      grp.add(cell);
+    }
+    r += hT*0.48; y += hT;
+  }
+  return grp;
+}
+
+/* USTUN/GULDASTA BOSHI — kengayuvchi KORBEL.
+   Kataklarni aylana bo'ylab sochib chiqish bu miqyosda ishlamadi: ular
+   bir-biriga tegmay, "to'kilayotgan bo'laklar"dek ko'rinardi. Haqiqiy
+   Xiva ustun boshi — ketma-ket kengayuvchi o'yma halqalar; ular yaxlit
+   massa hosil qiladi va tepasidagi yostiqni ko'taradi. Eng yuqorida
+   bitta zich muqarnas qatori qo'shiladi. */
+function corbelCap(r0, tiers, height, matA, matB, matCell){
+  const grp = new THREE.Group();
+  const hT = height/tiers;
+  let rb = r0;
+  for(let t = 0; t < tiers; t++){
+    const rt = rb + hT*0.72;
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, hT*0.94, 32),
+                                (t % 2) ? matB : matA);
+    ring.position.y = t*hT + hT/2;
+    grp.add(ring);
+    rb = rt;
+  }
+  if(matCell){
+    const n = Math.max(12, Math.round(TAU*rb/(hT*0.62)));
+    const cr = Math.min(hT*0.42, TAU*rb/n*0.48);
+    const geo = muqCellGeo(cr);
+    for(let i = 0; i < n; i++){
+      const a = TAU*(i + 0.5)/n;
+      const cell = new THREE.Mesh(geo, matCell);
+      cell.position.set(Math.sin(a)*(rb - cr*0.5), tiers*hT + cr*0.6, Math.cos(a)*(rb - cr*0.5));
+      cell.rotation.y = a;
+      cell.rotation.x = Math.PI;
+      grp.add(cell);
+    }
+  }
+  return grp;
+}
+
+/* AYVON RAVOQ BOSHI — ichma-ich chekinuvchi ravoq qovurg'alari.
+   Kataklarni ravoq egrisi bo'ylab sochib chiqish yaxshi natija bermadi:
+   old tomondan ular alohida munchoqlardek ko'rinardi. Temuriylar
+   ayvonlarida ravoq boshi aslida ICHMA-ICH JOYLASHGAN, orqaga chekinuvchi
+   ravoq bandlaridan iborat — quyida aynan shu quriladi. Har band oldingisidan
+   kichikroq va chuqurroq, ranglari navbatlashadi. */
+function archRibs(ow, spring, apex, tiers, z0, dz, matA, matB){
+  const grp = new THREE.Group();
+  for(let t = 0; t < tiers; t++){
+    const k = 1 - t*0.085;
+    const bw = 0.13*k;
+    const sh = archBandShape(ow*k, spring, spring + (apex - spring)*k, bw);
+    const rib = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(sh, {depth:Math.abs(dz)*0.9, bevelEnabled:false, curveSegments:18}),
+      (t % 2) ? matB : matA);
+    rib.position.z = z0 + t*dz;
+    grp.add(rib);
+  }
+  return grp;
+}
+
+/* MUQARNAS KORBEL BANDI — gorizontal qator kataklar (ravoq yelkasida yoki
+   guldasta boshida). Kataklar zich terilgani uchun yaxlit asal uyasi
+   ko'rinishini beradi. */
+function muqarnasBand(width, n, tiers, cellR, mat){
+  const grp = new THREE.Group();
+  const geo = muqCellGeo(cellR);
+  for(let t = 0; t < tiers; t++){
+    const cnt = n - t*2;
+    if(cnt < 2) break;
+    const step = width/cnt;
+    for(let i = 0; i < cnt; i++){
+      const cell = new THREE.Mesh(geo, mat);
+      cell.position.set(-width/2 + step*(i + 0.5), t*cellR*1.35, -t*cellR*0.9);
+      cell.rotation.x = Math.PI;
+      grp.add(cell);
+    }
+  }
+  return grp;
+}
+
+/* --------------------------------------------------------------- USTUN
+   Xiva Juma masjidi uslubidagi o'yma yog'och ustun. Nisbatlari haqiqiyga
+   yaqin: tana diametri ~0.28, balandligi ~2.9 → ingichkalik ~10:1. */
+function buildUstun(){
+  const g = new THREE.Group();
+  const R = 0.145, Hs = 2.75;
+
+  /* sakkiz qirrali tosh poya — Xiva ustunlari aynan shunday poyada turadi */
+  const poya = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.46, 0.24, 8), archMat('stone'));
+  poya.position.y = 0.12; g.add(poya);
+  const poya2 = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.38, 0.14, 8), archMat('stone'));
+  poya2.position.y = 0.31; g.add(poya2);
+
+  /* kuza — vazasimon o'yma asos */
+  const kuza = new THREE.Mesh(
+    latheFromProfile([[0.13,0],[0.22,0.05],[0.27,0.13],[0.25,0.22],[0.19,0.31],[0.155,0.40],[0.145,0.46]], 1),
+    archMat('wood', 6, 1));
+  kuza.position.y = 0.38; g.add(kuza);
+
+  /* tana — entazis bilan; naqsh aylana bo'ylab 4, balandligi bo'ylab 14 */
+  const prof = [];
+  for(let i = 0; i <= 20; i++){
+    const t = i/20;
+    prof.push([R*(1 - 0.16*t + 0.055*Math.sin(Math.PI*t)), t*Hs]);
+  }
+  const tana = new THREE.Mesh(latheFromProfile(prof, 1), archMat('wood', 4, 14));
+  tana.position.y = 0.84; g.add(tana);
+
+  /* o'yma bo'g'inlar — halqa + ingichka bronza gardish */
+  for(const [y, rr] of [[1.05, 0.150], [2.05, 0.140], [3.05, 0.131]]){
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(rr*1.16, rr*1.16, 0.10, 32),
+                                archMat('wood', 5, 1, 0x8a4f22));
+    band.position.y = y; g.add(band);
+    for(const dy of [-0.055, 0.055]){
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(rr*1.18, 0.012, 8, 40), archMat('metal'));
+      ring.rotation.x = Math.PI/2; ring.position.y = y + dy; g.add(ring);
+    }
+  }
+
+  /* o'yma bosh — kengayuvchi korbel + muqarnas qatori */
+  const cap = corbelCap(R*1.02, 4, 0.42,
+                        archMat('wood', 6, 1),
+                        archMat('wood', 6, 1, 0x8a4f22),
+                        archMat('wood', 1, 1, 0xc98a45));
+  cap.position.y = 3.59; g.add(cap);
+
+  /* yostiq (bracket) va tosh bosh — nozik ustunga mos, ingichka */
+  const yostiq = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.10, 0.22), archMat('wood', 3, 1));
+  yostiq.position.y = 4.11; g.add(yostiq);
+  const yostiq2 = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.07, 0.27), archMat('wood', 4, 1, 0x8a4f22));
+  yostiq2.position.y = 4.20; g.add(yostiq2);
+  const bosh = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.09, 0.31), archMat('stone'));
+  bosh.position.y = 4.28; g.add(bosh);
+
+  g.userData.h = 4.34;
+  return g;
+}
+
+/* ------------------------------------------------------------- DARVOZA
+   Koshin ramkadagi ikki tabaqali o'yma yog'och darvoza. Tabaqalar
+   haqiqiy duradgorlikdagidek: tik tayanchlar (stil), ko'ndalang
+   bog'lamalar (rels) va ular orasida botiq panellar. */
+function buildDarvoza(){
+  const g = new THREE.Group();
+  const W = 3.0, H = 4.0, D = 0.34;
+  const ow = 1.02, oh = 2.30, apexY = H - 0.30;
+
+  const ap = archOutline(ow, oh, apexY, 40);
+  const opening = new THREE.Path();
+  opening.moveTo(-ow, 0);
+  for(const q of ap) opening.lineTo(q[0], q[1]);
+  opening.lineTo(ow, 0);
+  opening.closePath();
+
+  const sh = new THREE.Shape();
+  sh.moveTo(-W/2, 0); sh.lineTo(W/2, 0); sh.lineTo(W/2, H); sh.lineTo(-W/2, H); sh.closePath();
+  sh.holes.push(opening);
+  const frame = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(sh, {depth:D, bevelEnabled:false, curveSegments:24}),
+    archMat('tile', 1/TU, 1/TU, 0x24518f));
+  frame.position.z = -D; g.add(frame);
+
+  /* archivolt */
+  const archv = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archBandShape(ow, oh, apexY, 0.16),
+                              {depth:0.06, bevelEnabled:false, curveSegments:20}),
+    archMat('tile', 1/0.16, 1/0.16, 0xc99b3f));
+  archv.position.z = 0.004; g.add(archv);
+
+  /* soffit — ichkarida yorug'lik kam */
+  const soffit = new THREE.Mesh(stripFromOutline(ap, D + 0.10),
+                                archMat('tile', 1/TU, 1/TU, 0x8d96a4));
+  soffit.material.side = THREE.DoubleSide;
+  g.add(soffit);
+
+  /* timpan */
+  const tsh = new THREE.Shape();
+  tsh.moveTo(-ow, oh);
+  for(const q of ap) tsh.lineTo(q[0], q[1]);
+  tsh.closePath();
+  const timpan = new THREE.Mesh(new THREE.ShapeGeometry(tsh, 24),
+                                archMat('tile', 1/(TU*0.7), 1/(TU*0.7), 0x7fc7c0));
+  timpan.position.z = -0.10; g.add(timpan);
+
+  /* ---- tabaqalar: stil + rels + botiq panel ---- */
+  const lw = ow - 0.02, lh = oh, zL = -0.17;
+  const stileW = lw*0.13, railH = lh*0.055;
+  for(const sgn of [-1, 1]){
+    const cxL = sgn*lw/2;
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(lw, lh, 0.06),
+                                archMat('wood', 1, 3, 0x6f3d1a));   /* botiq fon */
+    leaf.position.set(cxL, lh/2, zL - 0.03); g.add(leaf);
+
+    /* tik tayanchlar */
+    for(const sx of [-1, 1]){
+      const st2 = new THREE.Mesh(new THREE.BoxGeometry(stileW, lh, 0.075),
+                                 archMat('wood', 1, 8, 0x8a4f22));
+      st2.position.set(cxL + sx*(lw/2 - stileW/2), lh/2, zL + 0.01); g.add(st2);
+    }
+    /* ko'ndalang bog'lamalar — 4 ta, orasida 3 panel */
+    for(let i = 0; i <= 3; i++){
+      const y = lh*(0.04 + i*0.31);
+      const rl = new THREE.Mesh(new THREE.BoxGeometry(lw, railH, 0.075),
+                                archMat('wood', 3, 1, 0x8a4f22));
+      rl.position.set(cxL, y, zL + 0.01); g.add(rl);
+    }
+    /* botiq panellar — nozik naqsh bilan */
+    for(let i = 0; i < 3; i++){
+      const y = lh*(0.195 + i*0.31);
+      const pnl = new THREE.Mesh(new THREE.BoxGeometry(lw - 2*stileW - 0.02, lh*0.24, 0.05),
+                                 archMat('wood', 1, 1, 0xc98a45));
+      pnl.position.set(cxL, y, zL); g.add(pnl);
+      /* panel atrofidagi ingichka gardish */
+      const brd = new THREE.Mesh(new THREE.BoxGeometry(lw - 2*stileW + 0.02, lh*0.26, 0.035),
+                                 archMat('dark'));
+      brd.position.set(cxL, y, zL - 0.012); g.add(brd);
+    }
+    /* bronza mixlar — tayanch va bog'lamalar bo'ylab */
+    const stud = archMat('metal');
+    const studGeo = new THREE.SphereGeometry(0.022, 10, 8);
+    for(let i = 0; i <= 3; i++){
+      for(const sx of [-1, 1]){
+        const s2 = new THREE.Mesh(studGeo, stud);
+        s2.position.set(cxL + sx*(lw/2 - stileW/2), lh*(0.04 + i*0.31), zL + 0.05);
+        g.add(s2);
+      }
+    }
+    /* halqa tutqich + rozetka */
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.02, 16), archMat('metal'));
+    plate.rotation.x = Math.PI/2; plate.position.set(sgn*0.26, 1.30, zL + 0.05); g.add(plate);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.018, 10, 30), archMat('metal'));
+    ring.position.set(sgn*0.26, 1.22, zL + 0.055); g.add(ring);
+  }
+
+  const ostona = new THREE.Mesh(new THREE.BoxGeometry(W + 0.34, 0.14, D + 0.44), archMat('stone'));
+  ostona.position.set(0, 0.07, -D/2); g.add(ostona);
+  g.userData.h = H;
+  return g;
+}
+
+/* ------------------------------------------------------------- PESHTOQ
+   Registon uslubidagi darvozaxona. */
+function buildPeshtoq(){
+  const g = new THREE.Group();
+  const W = 4.0, H = 5.0, D = 0.42;
+  const ow = 1.15, spring = 2.05, apex = 3.95;
+  const nicheD = 1.20;
+  const band = 0.38;                       /* hoshiya (kitoba) eni */
+
+  const ap = archOutline(ow, spring, apex, 44);
+  const opening = new THREE.Path();
+  opening.moveTo(-ow, 0);
+  for(const q of ap) opening.lineTo(q[0], q[1]);
+  opening.lineTo(ow, 0);
+  opening.closePath();
+
+  /* 1) asosiy koshin maydoni */
+  const iw = W/2 - band, ih = H - band;
+  const inner = new THREE.Shape();
+  inner.moveTo(-iw, 0); inner.lineTo(iw, 0); inner.lineTo(iw, ih); inner.lineTo(-iw, ih); inner.closePath();
+  inner.holes.push(opening);
+  const face = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(inner, {depth:D, bevelEnabled:false, curveSegments:24}),
+    archMat('tile', 1/TU, 1/TU));
+  face.position.z = -D; g.add(face);
+
+  /* 2) HOSHIYA (kitoba) — to'q ko'k, bandda aynan bitta plitka yotadi */
+  const outer = new THREE.Shape();
+  outer.moveTo(-W/2, 0); outer.lineTo(W/2, 0); outer.lineTo(W/2, H); outer.lineTo(-W/2, H); outer.closePath();
+  const cut = new THREE.Path();
+  cut.moveTo(-iw, 0); cut.lineTo(iw, 0); cut.lineTo(iw, ih); cut.lineTo(-iw, ih); cut.closePath();
+  outer.holes.push(cut);
+  const hoshiya = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(outer, {depth:D + 0.10, bevelEnabled:false}),
+    archMat('tile', 1/band, 1/band, 0x24518f));
+  hoshiya.position.z = -D; g.add(hoshiya);
+  /* hoshiya chetidagi ingichka oq gardish */
+  for(const [w2, h2, z2] of [[W, H, -D + D + 0.105]]){
+    const eg = new THREE.Mesh(new THREE.BoxGeometry(w2 + 0.05, 0.045, 0.05), archMat('stone'));
+    eg.position.set(0, h2 + 0.02, z2); g.add(eg);
+  }
+
+  /* 3) archivolt */
+  const archv = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archBandShape(ow, spring, apex, 0.20),
+                              {depth:0.07, bevelEnabled:false, curveSegments:20}),
+    archMat('tile', 1/0.20, 1/0.20, 0xc99b3f));
+  archv.position.z = 0.005; g.add(archv);
+
+  /* 4) ayvon ichki yuzalari — yorug'lik kam, to'qroq tus */
+  const INNER = 0x93a3b8;
+  const soffit = new THREE.Mesh(stripFromOutline(ap, nicheD),
+                                archMat('tile', 1/TU, 1/TU, INNER));
+  soffit.material.side = THREE.DoubleSide;
+  soffit.position.z = -D; g.add(soffit);
+
+  for(const sgn of [-1, 1]){
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(nicheD, spring),
+                                archMat('tile', nicheD/TU, spring/TU, INNER));
+    wall.material.side = THREE.DoubleSide;
+    wall.rotation.y = sgn*Math.PI/2;
+    wall.position.set(sgn*ow, spring/2, -D - nicheD/2);
+    g.add(wall);
+  }
+
+  const backSh = new THREE.Shape();
+  backSh.moveTo(-ow, 0);
+  for(const q of ap) backSh.lineTo(q[0], q[1]);
+  backSh.lineTo(ow, 0); backSh.closePath();
+  const back = new THREE.Mesh(new THREE.ShapeGeometry(backSh, 24),
+                              archMat('tile', 1/TU, 1/TU, 0x74869c));
+  back.position.z = -D - nicheD; g.add(back);
+
+  /* 5) ravoq boshi — ichma-ich chekinuvchi qovurg'alar + yelkada muqarnas */
+  const ribs = archRibs(ow*0.99, spring, apex, 5, -D - 0.02, -0.19,
+                        archMat('tile', 1/0.13, 1/0.13, 0xbf9648),
+                        archMat('tile', 1/0.13, 1/0.13, 0x2f639f));
+  g.add(ribs);
+  /* Yelka muqarnasi ayvon YON DEVORLARIDA — ilgari u ochiq joyni kesib
+     o'tuvchi tokchadek ko'rinardi. */
+  for(const sgn of [-1, 1]){
+    const corb = muqarnasBand(nicheD*0.8, 6, 2, 0.062, archMat('tile', 1, 1, 0xbf9648));
+    corb.rotation.y = sgn*Math.PI/2;
+    corb.position.set(sgn*(ow - 0.06), spring - 0.06, -D - nicheD/2);
+    g.add(corb);
+  }
+
+  /* 6) guldasta — burchak yarim minoralari: poya, tana, muqarnas boshi */
+  for(const sgn of [-1, 1]){
+    const gx = sgn*(W/2 - 0.06), gz = 0.19;
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.30, 0.26, 28), archMat('stone'));
+    foot.position.set(gx, 0.13, gz); g.add(foot);
+    const gd = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, H - 0.55, 32, 1),
+                              archMat('tile', 3, Math.round((H - 0.55)/TU), 0x24518f));
+    gd.position.set(gx, 0.26 + (H - 0.55)/2, gz); g.add(gd);
+    const gcap = corbelCap(0.21, 3, 0.22,
+                           archMat('tile', 1/0.12, 1/0.12, 0xbf9648),
+                           archMat('tile', 1/0.12, 1/0.12, 0x2f639f),
+                           archMat('tile', 1, 1, 0xbf9648));
+    gcap.position.set(gx, H - 0.29, gz); g.add(gcap);
+    /* muqarnas ustidagi gardish — bosh yaxlit ko'rinsin */
+    const gring = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.24, 0.06, 28), archMat('stone'));
+    gring.position.set(gx, H - 0.02, gz); g.add(gring);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.25, 0.16, 28), archMat('stone'));
+    top.position.set(gx, H + 0.06, gz); g.add(top);
+  }
+
+  /* 7) yelka medalyonlari */
+  for(const sgn of [-1, 1]){
+    const med = new THREE.Mesh(new THREE.CircleGeometry(0.24, 40),
+                               archMat('tile', 1/0.24, 1/0.24, 0xd8b45a));
+    med.position.set(sgn*(iw - 0.38), ih - 0.46, 0.012); g.add(med);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.018, 8, 40), archMat('metal'));
+    rim.position.set(sgn*(iw - 0.38), ih - 0.46, 0.012); g.add(rim);
+  }
+
+  /* 8) poydevor va gulband */
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 0.5, 0.30, D + nicheD + 0.5), archMat('stone'));
+  plinth.position.set(0, 0.15, -D - nicheD/2 + 0.1); g.add(plinth);
+  const cornice = new THREE.Mesh(new THREE.BoxGeometry(W + 0.30, 0.18, D + 0.34), archMat('stone'));
+  cornice.position.set(0, H + 0.09, -D + 0.06); g.add(cornice);
+
+  g.userData.h = H + 0.2;
+  return g;
+}
+
+function buildArch(kind){
+  T3.archMats = [];
+  const g = kind === 'ustun'   ? buildUstun()
+          : kind === 'darvoza' ? buildDarvoza()
+          :                      buildPeshtoq();
+  /* KAFOLAT: o'raladigan yuzalarda (Cylinder / Lathe / Sphere / Torus) naqsh
+     aylana bo'ylab BUTUN son marta takrorlanishi SHART — aks holda buyum
+     orqasida ulanish chizig'i chiqadi. Qism qurayotganda bu oson unutiladi
+     (guldasta boshidagi halqalarda 8.33 chiqib qolgandi), shuning uchun
+     tekshiruv geometriya turi ma'lum bo'lgan yagona joyda — shu yerda —
+     markazlashtirilgan. */
+  g.traverse(o=>{
+    if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; }
+    if(!o.isMesh || !o.material || !o.material.userData || !o.material.userData.rep) return;
+    if(!/Cylinder|Lathe|Sphere|Torus/.test((o.geometry && o.geometry.type) || '')) return;
+    const r = o.material.userData.rep;
+    r[0] = Math.max(1, Math.round(r[0]));
+  });
+  g.position.y = FLOOR_Y;
+  return g;
+}
+
 /* Lagan — planar UV (medalyon tepadan); piyola/kosa/tuvak — standart UV (friz aylanaga o'raladi, haqiqiy sopolchilikdagidek) */
 const PLATE_KINDS = {lagan:1};
 const FRIEZE_KINDS = {piyola:1, kosa:1, tuvak:1, stakan:1, shar:1};
@@ -5652,6 +6706,61 @@ function buildGeometry(kind){
     default:       return new THREE.SphereGeometry(1.3, 48, 32);
   }
 }
+/* --------------------------------------------------------------------------
+   3D TILING
+   Naqsh yuza bo'ylab CHOK-SUZ va BIR TEKIS taqsimlanishi kerak.
+   Ilgari tekstura 1024 px kanvasga atigi 3 katak qilib chizilar va butun
+   buyumga BIR MARTA yopishtirilardi — natijada piyolada 2-3 ta ulkan naqsh
+   chiqardi (foydalanuvchi ko'rsatgan holat). Endi:
+     · tekstura HAQIQIY RAPPORT (makeSeamlessRepeat — chok-suzligi 160
+       holatda o'lchangan),
+     · takrorlanish soni buyum o'lchamidan hisoblanadi, shuning uchun naqsh
+       har buyumda bir xil FIZIK o'lchamda chiqadi,
+     · aylanma yuzalarda u bo'yicha son BUTUN bo'ladi — aks holda buyum
+       orqasida ulanish chizig'i paydo bo'lardi.
+   -------------------------------------------------------------------------- */
+const TILE3D = 0.62;        /* naqsh plitkasining dunyo birligidagi o'lchami */
+let TILE_AR = 1;            /* oxirgi rapportning bo'y/en nisbati */
+
+/* Yuzaning v yo'nalishi bo'ylab HAQIQIY uzunligi.
+   Lathe va sferada v profil (meridian) bo'ylab boradi va bu uzunlik bbox
+   balandligidan sezilarli katta bo'ladi: piyolada profil 2.06, balandlik esa
+   atigi 1.4. Bbox dan hisoblansa naqsh vertikal bo'yicha ~60% cho'zilib
+   ketadi — buyumda aynan shu ko'rinardi. Shuning uchun uzunlik geometriyaning
+   O'ZIDAN o'lchanadi: u≈0 ustunidagi nuqtalar v bo'yicha tartiblanib,
+   ketma-ket masofalar yig'iladi. */
+function vSpanOf(geo){
+  const pos = geo.attributes && geo.attributes.position;
+  const uv  = geo.attributes && geo.attributes.uv;
+  if(!pos || !uv) return null;
+  const col = [];
+  for(let i = 0; i < uv.count; i++){
+    if(uv.getX(i) < 0.02) col.push([uv.getY(i), pos.getX(i), pos.getY(i), pos.getZ(i)]);
+  }
+  if(col.length < 3) return null;
+  col.sort((a, b)=> a[0] - b[0]);
+  let L = 0;
+  for(let i = 1; i < col.length; i++)
+    L += Math.hypot(col[i][1]-col[i-1][1], col[i][2]-col[i-1][2], col[i][3]-col[i-1][3]);
+  return L > 1e-4 ? L : null;
+}
+
+function tileRepeatFor(kind, geo){
+  if(!geo) return [1, 1];
+  if(!geo.boundingBox) geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const sx = bb.max.x - bb.min.x, sy = bb.max.y - bb.min.y, sz = bb.max.z - bb.min.z;
+  const vTile = TILE3D*(TILE_AR || 1);          /* naqsh cho'zilmasligi uchun */
+  const iv = v => Math.max(1, Math.round(v));
+  if(kind === 'panel')  return [iv(sx/TILE3D), iv(sy/vTile)];
+  if(kind === 'lagan')  return [iv(sx/TILE3D), iv(sz/vTile)];
+  /* aylanma yuzalar: u — aylana bo'ylab (BUTUN son SHART, aks holda buyum
+     orqasida ulanish chizig'i chiqadi), v — profil uzunligi bo'ylab */
+  const R = Math.max(sx, sz)/2;
+  const vLen = vSpanOf(geo) || sy;
+  return [Math.max(3, Math.round(TAU*R/TILE3D)), iv(vLen/vTile)];
+}
+
 function makePatternTexture(){
   const S = 1024;
   const cnv = document.createElement('canvas');
@@ -5664,6 +6773,19 @@ function makePatternTexture(){
   octx.fillRect(0,0,S,S);
   const kind = T3 ? T3.kind : 'lagan';
   if(T3D.tess){
+    let rep = null;
+    try{ rep = makeSeamlessRepeat(320, T3D.group || 'p4', {}); }catch(e){ console.warn('[3d] rapport', e); }
+    if(rep && rep.canvas && rep.w > 4 && rep.h > 4){
+      TILE_AR = rep.h/rep.w;
+      cnv.width = rep.w; cnv.height = rep.h;
+      const c2 = cnv.getContext('2d');
+      c2.drawImage(rep.canvas, 0, 0);
+      /* Rasm (foto) bu rejimda qo'shilmaydi: tekstura ko'p marta
+         takrorlangani uchun rasm ham takrorlanib ketardi. */
+      return cnv;
+    }
+    /* zaxira yo'l — rapport chiqmasa eski usul */
+    TILE_AR = 1;
     const keepG = TESS.group, keepC = TESS.cell, keepB = TESS.showCell;
     TESS.group = T3D.group;
     TESS.cell = Math.round(S/3);
@@ -5797,6 +6919,19 @@ function arcText(ctx, text, r, fontPx, fillC, strokeC){
   }
   ctx.restore();
 }
+/* Me'moriy yuzalar uchun CHOK-SUZ plitka.
+   Oddiy buyumlarda tekstura buyumga moslab chiziladi (medalyon, friz), me'moriy
+   yuzada esa naqsh yuza bo'ylab KO'P MARTA takrorlanadi — shuning uchun u
+   haqiqiy rapport bo'lishi shart, aks holda har takrorlanishda chok chizig'i
+   ko'rinadi. Shu bois bu yerda eksportdagi bir xil makeSeamlessRepeat()
+   ishlatiladi: uning chok-suzligi 160 holatda o'lchab tekshirilgan. */
+function makeArchTileCanvas(){
+  try{
+    const t = makeSeamlessRepeat(256, T3D.group || 'p4', {});
+    if(t && t.canvas) return t.canvas;
+  }catch(e){ console.warn('[3d] rapport', e); }
+  return makePatternTexture();
+}
 function update3DTexture(){
   if(!threeReady || !T3 || !T3.mat) return;
   const tex = new THREE.CanvasTexture(makePatternTexture());
@@ -5804,6 +6939,16 @@ function update3DTexture(){
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   if(THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+  /* Tiling yoqilganda naqsh buyum o'lchamiga qarab ko'p marta takrorlanadi
+     (tileRepeatFor izohiga qarang). Yakka naqsh rejimida — bir marta. */
+  if(T3D.tess && T3.mesh && T3.mesh.geometry && !ARCH_KINDS[T3.kind]){
+    const r = tileRepeatFor(T3.kind, T3.mesh.geometry);
+    tex.repeat.set(r[0], r[1]);
+    T3._rep = r;
+  } else {
+    tex.repeat.set(1, 1);
+    T3._rep = [1, 1];
+  }
   const old = T3.mat.map;
   for(const m of (T3.mats || [T3.mat])){
     m.map = tex;
@@ -5811,6 +6956,29 @@ function update3DTexture(){
     m.needsUpdate = true;
   }
   if(old && old.dispose) old.dispose();
+
+  /* me'moriy qismlar: bitta rapport kanvasi, lekin har qism o'z zichligi
+     bilan — repeat teksturaga tegishli bo'lgani uchun har material o'z
+     nusxasini oladi (rasm xotirada baham ko'riladi) */
+  const arch = T3.archMats || [];
+  if(!arch.length) return;
+  const cnv = makeArchTileCanvas();
+  const base = new THREE.CanvasTexture(cnv);
+  base.wrapS = base.wrapT = THREE.RepeatWrapping;
+  base.anisotropy = 8;
+  if(THREE.sRGBEncoding !== undefined) base.encoding = THREE.sRGBEncoding;
+  for(const m of arch){
+    const rep = m.userData.rep || [1, 1];
+    const t2 = base.clone();
+    t2.needsUpdate = true;
+    t2.wrapS = t2.wrapT = THREE.RepeatWrapping;
+    t2.repeat.set(rep[0], rep[1]);
+    const prev = m.map;
+    m.map = t2;
+    if(m.emissive) m.emissiveMap = t2;
+    m.needsUpdate = true;
+    if(prev && prev.dispose) prev.dispose();
+  }
 }
 const PAINT = { raf:0, active:false };
 /* NAQSH BUYUMDA JONLI CHIZILADI: tekstura progressiv ochiladi, buyum sekin aylanadi */
@@ -5818,14 +6986,16 @@ function animatePaint3D(){
   if(!threeReady || !T3){ ntf('Avval 3D sahifasini oching', 'err'); return; }
   if(typeof cancelAnimationFrame === 'function') cancelAnimationFrame(PAINT.raf);
   const full = makePatternTexture();
-  const S = full.width || 1024;
+  /* rapport kvadrat bo'lmasligi mumkin (p6/p6m) — ikkala o'lchamni olamiz */
+  const S = full.width || 1024, SH = full.height || S;
   const cnv = document.createElement('canvas');
-  cnv.width = cnv.height = S;
+  cnv.width = S; cnv.height = SH;
   const ctx = cnv.getContext('2d');
   if(!ctx) return;
   const tex = new THREE.CanvasTexture(cnv);
   tex.anisotropy = 8;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  if(T3._rep) tex.repeat.set(T3._rep[0], T3._rep[1]);
   if(THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
   const old = T3.mat.map;
   for(const m of (T3.mats || [T3.mat])){
@@ -5842,18 +7012,18 @@ function animatePaint3D(){
   const step = ()=>{
     const t = Math.min(1, (nowFn()-t0)/dur);
     const e = 1 - Math.pow(1-t, 2.1);
-    ctx.clearRect(0,0,S,S);
+    ctx.clearRect(0,0,S,SH);
     ctx.fillStyle = pal.bg;
-    ctx.fillRect(0,0,S,S);
+    ctx.fillRect(0,0,S,SH);
     ctx.save();
     let a1 = 0;
     if(frieze){
-      ctx.beginPath(); ctx.rect(0,0,S*e,S); ctx.clip();
+      ctx.beginPath(); ctx.rect(0,0,S*e,SH); ctx.clip();
     } else {
       a1 = -Math.PI/2 + e*TAU;
       ctx.beginPath();
-      ctx.moveTo(S/2,S/2);
-      ctx.arc(S/2,S/2, S*0.72*Math.min(1, 0.3+e), -Math.PI/2, a1);
+      ctx.moveTo(S/2,SH/2);
+      ctx.arc(S/2,SH/2, Math.max(S,SH)*0.72*Math.min(1, 0.3+e), -Math.PI/2, a1);
       ctx.closePath();
       ctx.clip();
     }
@@ -5865,8 +7035,8 @@ function animatePaint3D(){
       ctx.shadowBlur = 28;
       ctx.fillStyle = '#e0bd6a';
       let bx, by;
-      if(frieze){ bx = S*e; by = S*0.5; }
-      else { const br = S*0.35; bx = S/2 + Math.cos(a1)*br; by = S/2 + Math.sin(a1)*br; }
+      if(frieze){ bx = S*e; by = SH*0.5; }
+      else { const br = Math.max(S,SH)*0.35; bx = S/2 + Math.cos(a1)*br; by = SH/2 + Math.sin(a1)*br; }
       ctx.beginPath(); ctx.arc(bx,by,11,0,TAU); ctx.fill();
       ctx.restore();
     }
@@ -5876,7 +7046,7 @@ function animatePaint3D(){
       PAINT.raf = requestAnimationFrame(step);
     } else {
       PAINT.active = false;
-      ctx.clearRect(0,0,S,S);
+      ctx.clearRect(0,0,S,SH);
       ctx.drawImage(full,0,0);
       tex.needsUpdate = true;
       ntf('Naqsh buyumga tushirildi 🖌', 'ok');
@@ -5907,6 +7077,18 @@ function disposeObject3D(obj){
     obj.geometry.dispose();
   }
 }
+/* Har buyum uchun kamera kadri: me'moriy ob'yektlar baland, shuning uchun
+   kamera uzoqroqqa suriladi va nigoh markazi yuqoriroqqa ko'tariladi —
+   aks holda ustun yoki peshtoq kadrga sig'maydi. */
+/* look — nigoh markazi, eye — kamera balandligi, d — masofa.
+   Balandlikning yarmiga qaraymiz va shu balandlikdan bir oz yuqoridan
+   turamiz: aks holda kamera tikka pastga qaraydi va bino "yiqilib"
+   ko'rinadi. d ≈ balandlik×1.7 — 42° ko'rish burchagida to'liq sig'adi. */
+const CAM_FRAME = {
+  ustun:   {look: FLOOR_Y + 2.20, eye: FLOOR_Y + 2.55, d: 7.4},
+  darvoza: {look: FLOOR_Y + 2.00, eye: FLOOR_Y + 2.30, d: 7.0},
+  peshtoq: {look: FLOOR_Y + 2.55, eye: FLOOR_Y + 2.90, d: 9.0}
+};
 function setObject(kind){
   if(!T3) return;
   if(T3.mesh){
@@ -5914,7 +7096,14 @@ function setObject(kind){
     disposeObject3D(T3.mesh);
   }
   T3.kind = kind;
-  const obj = new THREE.Mesh(buildGeometry(kind), T3.mat);
+  const cf = CAM_FRAME[kind] || {look:0, eye:1.9, d:4.9};
+  T3.camLook = cf.look; T3.camEye = cf.eye; T3.camDist = cf.d;
+  T3.camera.position.z = cf.d;
+  /* marmar poydevor faqat idishlar uchun — me'moriy ob'yekt polda turadi */
+  if(T3.ped) T3.ped.visible = !ARCH_KINDS[kind];
+  const obj = ARCH_KINDS[kind] ? buildArch(kind)
+                               : new THREE.Mesh(buildGeometry(kind), T3.mat);
+  if(!ARCH_KINDS[kind]) T3.archMats = [];
   if(kind==='lagan') obj.rotation.x = 0.5;   /* lagan yuzi tomoshabinga qaragan */
   if(kind==='panel') obj.rotation.x = 0;
   obj.traverse ? obj.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = false; } })
@@ -6031,7 +7220,7 @@ function init3D(){
   matWood.emissiveIntensity = 0.12;
   const matStone = new THREE.MeshStandardMaterial({color:0xf1ede2, roughness:0.5, metalness:0.02});
   const matDark = new THREE.MeshStandardMaterial({color:0x151009, roughness:1});
-  T3 = {scene, camera, renderer, group, mesh:null, mat, matWood, matStone, matDark, mats:[mat, matWood], amb, hemi, key, fill:fillL, auto:false, kind:'lagan', dust:{pts:dust,pos:dPos,spd:dSpd,n:DUST_N}, parX:0, parY:0, intro:null};
+  T3 = {scene, camera, renderer, group, mesh:null, mat, matWood, matStone, matDark, mats:[mat, matWood], archMats:[], amb, hemi, key, fill:fillL, auto:false, kind:'lagan', dust:{pts:dust,pos:dPos,spd:dSpd,n:DUST_N}, parX:0, parY:0, intro:null, ped, camLook:0, camEye:1.9, camDist:4.9};
   threeReady = true;
   const objSel = $('sel-obj');
   setObject(objSel ? objSel.value : 'lagan');
@@ -6088,8 +7277,9 @@ function init3D(){
     }
     /* parallaks kamera */
     camera.position.x += (T3.parX - camera.position.x)*0.05;
-    camera.position.y += (1.9 + T3.parY - camera.position.y)*0.05;
-    camera.lookAt(0, 0, 0);
+    const eyeY = (T3.camEye === undefined ? 1.9 : T3.camEye);
+    camera.position.y += (eyeY + T3.parY - camera.position.y)*0.05;
+    camera.lookAt(0, T3.camLook || 0, 0);
     renderer.render(scene, camera);
   };
   animate();
@@ -6163,6 +7353,35 @@ function startARSim(){
   ntf('Simulyatsiya rejimi yoqildi 🖼', 'ok');
 }
 
+/* AR uchun ikki xil tasvir kerak:
+   · MEDALYON — devor va piyolada bitta naqsh sifatida yotadi;
+   · CHOK-SUZ MAYDON — gilam va polda naqsh takrorlanadi, shuning uchun u
+     haqiqiy rapportdan yig'iladi. Ilgari bu yerda ham medalyon ishlatilib,
+     u 3x3 qilib takrorlanardi — natijada plitkalar orasida UZILISH va
+     bo'sh joylar ko'rinardi. */
+let arTileCanvas = null, arTileKey = '';
+function arTileField(W, H){
+  const key = P.type + '|' + P.pal + '|' + P.sym + '|' + P.cmp + '|' + P.dens + '|' +
+              P.sw + '|' + P.lay + '|' + (T3D.group || 'p4') + '|' + W + 'x' + H;
+  if(arTileCanvas && arTileKey === key) return arTileCanvas;
+  let rep = null;
+  try{ rep = makeSeamlessRepeat(256, T3D.group || 'p4', {}); }catch(e){ console.warn('[ar] rapport', e); }
+  const cnv = document.createElement('canvas');
+  cnv.width = W; cnv.height = H;
+  const c2 = cnv.getContext('2d');
+  if(!c2) return null;
+  if(rep && rep.canvas){
+    const pat = c2.createPattern(rep.canvas, 'repeat');
+    if(pat){ c2.fillStyle = pat; c2.fillRect(0, 0, W, H); }
+  } else {
+    /* zaxira — rapport chiqmasa medalyon bilan to'ldiramiz */
+    const t = Math.min(W, H)/2;
+    for(let y = 0; y < H; y += t) for(let x = 0; x < W; x += t)
+      drawPattern(c2, x + t/2, y + t/2, t*0.5, P);
+  }
+  arTileCanvas = cnv; arTileKey = key;
+  return cnv;
+}
 function renderArPattern(){
   if(!arPatCanvas){
     arPatCanvas = document.createElement('canvas');
@@ -6172,6 +7391,7 @@ function renderArPattern(){
   if(!octx) return;
   octx.clearRect(0,0,512,512); /* fon TO'LIQ SHAFFOF — hech qanday fill yo'q */
   drawPattern(octx, 256, 256, 236, P);
+  arTileKey = '';               /* maydon ham qayta yig'ilsin */
   arNeedsRedraw = false;
 }
 function drawArSurface(ctx, W, H){
@@ -6198,9 +7418,12 @@ function drawArSurface(ctx, W, H){
       dy += hRow;
     }
   } else if(AR.surface==='pol'){
-    /* perspektiv trapetsiya: uzoqda tor, yaqinida keng */
+    /* perspektiv trapetsiya: uzoqda tor, yaqinida keng.
+       Manba CHOK-SUZ maydon — shuning uchun qatorlar orasida uzilish yo'q. */
     ctx.translate(cx,cy);
-    const rows = 36, srcH = 512/rows;
+    const src = arTileField(1024, 1024) || arPatCanvas;
+    const SH = src.height, SW = src.width;
+    const rows = 36, srcH = SH/rows;
     let dy = -size/2;
     for(let j=0;j<rows;j++){
       const t = j/rows;
@@ -6209,17 +7432,27 @@ function drawArSurface(ctx, W, H){
       const hRow = (size/rows)*k;
       ctx.save();
       ctx.rotate(AR.rot*Math.PI/180*0.2);
-      ctx.drawImage(arPatCanvas, 0, j*srcH, 512, srcH, -wRow/2, dy, wRow, hRow+0.7);
+      ctx.drawImage(src, 0, j*srcH, SW, srcH, -wRow/2, dy, wRow, hRow+0.7);
       ctx.restore();
       dy += hRow;
     }
-  } else { /* gilam: tekis + takror */
+  } else { /* gilam: CHOK-SUZ maydon — rapport takrorlanadi, uzilish yo'q */
     ctx.translate(cx,cy);
     ctx.rotate(AR.rot*Math.PI/180);
-    const tile = size*0.5;
-    for(let gy=-1; gy<=1; gy++){
-      for(let gx=-1; gx<=1; gx++){
-        ctx.drawImage(arPatCanvas, gx*tile - tile/2, gy*tile - tile/2, tile, tile);
+    const fld = arTileField(1024, 1024);
+    if(fld){
+      const pat = ctx.createPattern(fld, 'repeat');
+      const half = size*0.85;
+      if(pat){
+        ctx.save();
+        /* naqsh AR.size ga qarab kattalashadi */
+        const k = size/512;
+        ctx.scale(k, k);
+        ctx.fillStyle = pat;
+        ctx.fillRect(-half/k, -half/k, 2*half/k, 2*half/k);
+        ctx.restore();
+      } else {
+        ctx.drawImage(fld, -half, -half, 2*half, 2*half);
       }
     }
   }
@@ -6248,7 +7481,18 @@ function startAR(){
   const errBox = $('ar-err');
   if(errBox) errBox.textContent = '';
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    if(errBox) errBox.textContent = 'Brauzeringiz kamerani qo\'llab-quvvatlamaydi.';
+    /* Brauzer kamerani faqat XAVFSIZ MUHITDA beradi (https yoki localhost).
+       Oddiy http:// da navigator.mediaDevices umuman mavjud bo'lmaydi va
+       ilgari bu "brauzeringiz qo'llab-quvvatlamaydi" deb ko'rsatilardi —
+       sabab noto'g'ri aytilgan bo'lardi. */
+    const secure = (typeof isSecureContext !== 'undefined') ? isSecureContext
+                 : (location.protocol === 'https:' || location.hostname === 'localhost');
+    const msg = secure
+      ? 'Brauzeringiz kamerani qo\'llab-quvvatlamaydi.'
+      : 'Kamera faqat HTTPS orqali ishlaydi. Saytni https:// bilan oching '
+        + '(GitHub Pages allaqachon HTTPS). Hozircha «Simulyatsiya» tugmasidan foydalaning.';
+    if(errBox) errBox.textContent = msg;
+    ntf(msg, 'err');
     return;
   }
   navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
@@ -6256,7 +7500,17 @@ function startAR(){
     .then(stream=>{
       arStream = stream;
       const video = $('ar-video');
-      if(video) video.srcObject = stream;
+      if(video){
+        video.srcObject = stream;
+        video.style.display = '';          /* simulyatsiyadan keyin qaytariladi */
+        /* autoplay atributi bor, lekin ba'zi brauzerlar aniq play() talab
+           qiladi — xatosi jimgina yutilmasin */
+        const pr = video.play();
+        if(pr && pr.catch) pr.catch(e=>{
+          console.warn('[ar] video.play', e);
+          if(errBox) errBox.textContent = 'Videoni boshlab bo\'lmadi: ' + e.name;
+        });
+      }
       arActive = true;
       arNeedsRedraw = true;
       const card = $('ar-start-card'); if(card) card.style.display = 'none';
@@ -7364,6 +8618,45 @@ function wireUI(){
   segWire('exp-jqgroup','jqgroup',false);
   segWire('exp-jqdepth','jqdepth',true);
   segWire('exp-mm','mm',true);
+  segWire('exp-fill','fill',false);
+  /* Tayyor o'lchamni bosganda raqamli maydonlar ham yangilanadi —
+     shunda foydalanuvchi qaysi qiymat ketayotganini har doim ko'radi. */
+  const linkSeg = (segId, aId, bId)=>{
+    const box = $(segId); if(!box) return;
+    box.addEventListener('click', e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const v = b.dataset.v;
+      const a = $(aId), c = $(bId);
+      if(a){ a.value = v; delete a.dataset.touched; }
+      if(c){ c.value = v; delete c.dataset.touched; }
+    });
+  };
+  linkSeg('exp-mm',     'exp-mm-w', 'exp-mm-h');
+  linkSeg('exp-size',   'exp-px-w', 'exp-px-h');
+  linkSeg('exp-jqsize', 'exp-jq-c', null);
+  /* Raqam qo'lda o'zgartirilsa — tayyor tugmalardan tanlovni olib tashlaymiz,
+     chunki endi qiymat ularnikiga mos kelmasligi mumkin. */
+  const unsel = (inputIds, segId)=>{
+    for(const id of inputIds){
+      const el = $(id); if(!el) continue;
+      el.addEventListener('input', ()=>{
+        el.dataset.touched = '1';
+        const box = $(segId); if(!box) return;
+        const a = $(inputIds[0]), b = inputIds[1] ? $(inputIds[1]) : null;
+        const same = a && (!b || a.value === b.value) ? a.value : null;
+        box.querySelectorAll('button').forEach(x=>{
+          x.classList.toggle('sel', same !== null && x.dataset.v === same);
+        });
+        if(segId === 'exp-jqsize'){
+          const v = parseInt(el.value, 10);
+          if(isFinite(v)){ EXP.jqsize = Math.min(4096, Math.max(32, v)); expJqInfo(); }
+        }
+      });
+    }
+  };
+  unsel(['exp-mm-w','exp-mm-h'], 'exp-mm');
+  unsel(['exp-px-w','exp-px-h'], 'exp-size');
+  unsel(['exp-jq-c'], 'exp-jqsize');
   /* 3D */
   const objSel = $('sel-obj'); if(objSel) objSel.addEventListener('change', ()=>{ if(threeReady) setObject(objSel.value); });
   const lightSel = $('sel-light'); if(lightSel) lightSel.addEventListener('change', ()=>{ if(threeReady) setLights(lightSel.value); });
@@ -7554,11 +8847,22 @@ async function authBootstrap(){
       AUTH.mode = 'supabase';
       const { data } = await AUTH.client.auth.getSession();
       AUTH.user = data && data.session ? data.session.user : null;
-      if(AUTH.user){ await authLoadProfile(); await authEnforceStatus(); }
+      if(AUTH.user){ await authLoadProfile(); await authEnforceStatus(); await cloudLoadPatterns(); }
       AUTH.client.auth.onAuthStateChange(async (evt, session)=>{
+        const wasUser = AUTH.user;
         AUTH.user = session ? session.user : null;
-        if(AUTH.user) await authLoadProfile(); else AUTH.profile = null;
-        updateUserBtn(); renderGallery();
+        if(AUTH.user){
+          await authLoadProfile();
+          /* yangi kirish bo'lsa — mehmon naqshlarini ko'chiramiz, so'ng yuklaymiz */
+          if(!wasUser){
+            const moved = await cloudMigrateGuest();
+            if(moved) ntf(moved + ' ta naqsh hisobingizga ko\'chirildi ☁️', 'ok');
+          }
+          await cloudLoadPatterns();
+        } else {
+          AUTH.profile = null; CLOUD.patterns = null;
+        }
+        updateUserBtn(); renderGallery(); renderProfileCard();
         if(evt === 'PASSWORD_RECOVERY') openNewPassword();
       });
     }catch(e){
@@ -7980,10 +9284,16 @@ function renderProfile(){
   const pats = getSavedList();
   const d = new Date(u.created);
   const dateStr = d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
+  const cloud = (typeof cloudActive === 'function') && cloudActive();
   let html = '<div class="prof-row"><span>Ism</span><b>'+escHTML(u.name)+'</b></div>' +
     '<div class="prof-row"><span>Email</span><b>'+escHTML(u.login)+'</b></div>' +
+    '<div class="prof-row"><span>Ro\'yxatdan o\'tish usuli</span><b>' +
+      (u.provider === 'google' ? 'Google' : 'Email va parol') + '</b></div>' +
     '<div class="prof-row"><span>A\'zo bo\'lgan sana</span><b>'+dateStr+'</b></div>' +
-    '<div class="prof-row"><span>Yaratilgan naqshlar</span><b>'+pats.length+' ta</b></div>';
+    '<div class="prof-row"><span>Yaratilgan naqshlar</span><b>'+pats.length+' ta</b></div>' +
+    '<div class="prof-row"><span>Naqshlar qayerda</span><b>' +
+      (cloud ? '☁️ Hisobingizda — boshqa qurilmada ham ochiladi'
+             : '📱 Faqat shu qurilmada') + '</b></div>';
   html += '<div class="prof-sec"><h4>Mening naqshlarim</h4><div class="gal-grid" id="prof-gal">';
   html += '</div>' + (pats.length ? '' : '<div class="gal-empty">Studio da «💾 Saqlash» bosing — naqshlar shu yerda to\'planadi.</div>') + '</div>';
   html += '<div class="prof-sec"><h4>Sozlamalar — parolni o\'zgartirish</h4>' +
