@@ -1685,6 +1685,140 @@ function drawIslimiy(ctx,R,p,sw,c0,c1,c2,c3){
   ctx.beginPath(); circle(ctx,0,0,R); st(ctx,c2,sw*0.5);
 }
 
+/* ---------------------------------------------------------------------------
+   O'YMA PANEL (kartush) — Xiva/Farg'ona yog'och o'ymakorligi uslubi
+   ---------------------------------------------------------------------------
+   Ustun qirralaridagi va eshik tabaqalaridagi naqsh radial medalyon EMAS:
+   u tik KARTUSH — ramkali panel, ichida o'qqa nisbatan KO'ZGU-SIMMETRIK
+   islimiy. Uch xususiyati bu uslubni tanitadi va shu yerda takrorlanadi:
+
+     1) kartush ramkasi — yon tomonlari tik, uchlari siniq (ogee) yoy;
+     2) NUQTALI FON ("chizma" / pargori) — o'yilgan pastki qatlam;
+     3) RELYEF — har kontur ostiga yorug' va soya nusxasi, shunda naqsh
+        yassi chiziq emas, o'yilgan sirt bo'lib ko'rinadi.
+
+   Barcha shakllar oddiy yo'l buyruqlari bilan chiziladi (offscreen kanvas
+   yoki filtr ishlatilmaydi), shuning uchun SVG/DXF eksporti ham ishlaydi.
+   --------------------------------------------------------------------------- */
+function oymaCartouche(ctx, w, h){
+  const tip = h*0.22;                       /* uchdagi yoy balandligi */
+  ctx.moveTo(-w, -h + tip);
+  ctx.lineTo(-w,  h - tip);
+  /* yuqori siniq yoy: nazorat nuqtalari cho'qqida qarama-qarshi yo'nalgani
+     uchun uchi yumaloq emas, O'TKIR chiqadi */
+  ctx.bezierCurveTo(-w, h - tip*0.32, -w*0.13, h*1.02, 0, h);
+  ctx.bezierCurveTo( w*0.13, h*1.02,  w, h - tip*0.32, w, h - tip);
+  ctx.lineTo( w, -h + tip);
+  ctx.bezierCurveTo( w, -h + tip*0.32,  w*0.13, -h*1.02, 0, -h);
+  ctx.bezierCurveTo(-w*0.13, -h*1.02, -w, -h + tip*0.32, -w, -h + tip);
+  ctx.closePath();
+}
+
+function drawOyma(ctx,R,p,sw,c0,c1,c2,c3){
+  const hw = R*0.60, hh = R*0.95;
+  const fw = R*0.070;                       /* ramka eni */
+  const lw = Math.max(0.6, sw*0.85);
+  const iw = hw - fw*2.1, ih = hh - fw*2.1; /* ichki maydon */
+  const dark = shade(c0, 0.55), light = lerpColor(c1, '#ffffff', 0.72);
+
+  /* --- RELYEF yordamchisi: konturni yorug' va soya nusxasi bilan --- */
+  const d = Math.max(0.55, lw*0.55);
+  const relief = (path, wid)=>{
+    ctx.save(); ctx.translate(-d, -d); ctx.beginPath(); path(); st(ctx, light, wid); ctx.restore();
+    ctx.save(); ctx.translate( d,  d); ctx.beginPath(); path(); st(ctx, dark,  wid); ctx.restore();
+    ctx.beginPath(); path(); st(ctx, c0, wid);
+  };
+
+  /* --- 1) NUQTALI FON — o'yilgan pastki qatlam --- */
+  if(p.dens > 0.15){
+    ctx.save();
+    ctx.beginPath(); oymaCartouche(ctx, iw, ih); ctx.clip();
+    const step = Math.max(R*0.026, R*0.055*(1.15 - p.dens));
+    const rr = Math.max(0.5, step*0.17);
+    /* deterministik siljish — Math.random ishlatilmaydi, aks holda har
+       chizishda boshqa natija chiqib, eksport takrorlanmas bo'lib qolardi */
+    const jit = (i,j)=>{ const s = Math.sin(i*127.1 + j*311.7)*43758.5453; return s - Math.floor(s); };
+    for(let j = -Math.ceil(ih/step); j <= Math.ceil(ih/step); j++){
+      for(let i = -Math.ceil(iw/step); i <= Math.ceil(iw/step); i++){
+        const x = i*step + (j%2 ? step*0.5 : 0) + (jit(i,j)-0.5)*step*0.28;
+        const y = j*step + (jit(j,i)-0.5)*step*0.28;
+        ctx.beginPath(); circle(ctx, x, y, rr); fillHard(ctx, shade(c2, 0.30), 0.55);
+      }
+    }
+    ctx.restore();
+  }
+
+  /* --- 2) MARKAZIY KOMPOZITSIYA — o'qqa nisbatan ko'zgu-simmetrik ---
+     Tuzilma: har yon tomonda ILON-IZI NOVDA pastdan tepaga o'tadi, uning
+     har burilishida palmetta, oralarida barglar. Novda panel enining
+     deyarli hammasini egallagani uchun maydon TEKIS to'ladi.
+
+     (Avvalgi urinishda har tugundan logarifmik spiral chiqarilgandi: katta
+     L da spiralning tashqi o'rami yirik halqaga aylanib, panel o'rtasida
+     chalkash tugun hosil qilardi, yon tomonlar esa bo'sh qolardi. Ilon-izi
+     novda bu muammoni butunlay yo'q qiladi.) */
+  const waves = 3 + Math.min(2, Math.max(0, (p.cmp|0) - 3));
+  const half = (sgn)=>{
+    ctx.save(); ctx.scale(sgn, 1);
+
+    /* --- ilon-izi novda --- */
+    const vine = [];
+    const N = 120;
+    for(let i = 0; i <= N; i++){
+      const t = i/N;                                   /* 0 → pastdan tepaga */
+      const y = -ih*0.86 + t*ih*1.72;
+      /* novda o'qni KESIB O'TMAYDI: aks holda ikki ko'zgu nusxa markazda
+         chalkashib, tugun hosil qilardi */
+      const x = iw*0.16 + (0.5 + 0.5*Math.sin(t*Math.PI*waves - Math.PI/2))*iw*0.62;
+      vine.push([x, y]);
+    }
+    relief(()=>smoothPath(ctx, vine, false), lw*1.15);
+
+    /* burilish nuqtalari — palmetta va qarshi gajak */
+    for(let w = 0; w < waves; w++){
+      const t = (w + 0.5)/waves;                       /* to'lqin cho'qqisi */
+      const i = Math.round(t*N);
+      const a = vine[Math.max(0,i-1)], b2 = vine[Math.min(N,i+1)];
+      const ang = Math.atan2(b2[1]-a[1], b2[0]-a[0]);
+      const q = vine[i];
+      /* palmetta TASHQARIGA qaragan — o'q tomonga emas, aks holda ikki
+         ko'zgu nusxaning palmettalari markazda ustma-ust tushadi */
+      budAt(ctx, q[0], q[1], 0, iw*0.30, c1, c0, lw*0.9);
+    }
+
+    /* novda bo'ylab barglar — ikki tomonga navbatma-navbat */
+    const step = Math.max(5, 13 - Math.round(p.dens*7));
+    for(let i = step; i < N - step; i += step){
+      const a = vine[i-1], b2 = vine[i+1], q = vine[i];
+      const ang = Math.atan2(b2[1]-a[1], b2[0]-a[0]);
+      const side = (Math.floor(i/step) % 2) ? 1 : -1;
+      fineLeaf(ctx, q[0], q[1], ang + side*Math.PI/2.3, iw*0.20, iw*0.068, c1, dark, lw*0.42);
+    }
+    ctx.restore();
+  };
+  half(1); half(-1);
+
+  /* o'q bo'ylab ingichka poya — ikki novdani bog'laydi */
+  const spine = [];
+  for(let i = 0; i <= 24; i++) spine.push([0, -ih*0.88 + (i/24)*ih*1.76]);
+  relief(()=>smoothPath(ctx, spine, false), lw*0.8);
+
+  /* uchlardagi kurtaklar va markaziy palmetta */
+  budAt(ctx, 0,  ih*0.90, -Math.PI/2, ih*0.13, c1, c0, lw);
+  budAt(ctx, 0, -ih*0.90,  Math.PI/2, ih*0.13, c1, c0, lw);
+  for(const s2 of [-1, 1]){
+    fineLeaf(ctx, 0, 0, s2>0 ? 0 : Math.PI, iw*0.34, iw*0.13, c1, dark, lw*0.55);
+    fineLeaf(ctx, 0, 0, s2>0 ? -Math.PI/2 : Math.PI/2, iw*0.22, iw*0.085, c3, dark, lw*0.45);
+  }
+  ctx.beginPath(); circle(ctx, 0, 0, iw*0.075); fillHard(ctx, c3, 0.95); st(ctx, dark, lw*0.7);
+
+  /* --- 3) KARTUSH RAMKASI — eng ustida, relyef bilan --- */
+  relief(()=>oymaCartouche(ctx, iw, ih), lw*0.9);
+  relief(()=>oymaCartouche(ctx, hw, hh), lw*1.35);
+  /* ramka ichidagi ingichka yo'l */
+  ctx.beginPath(); oymaCartouche(ctx, (hw+iw)/2, (hh+ih)/2); st(ctx, c2, lw*0.55);
+}
+
 /* Rumi motivi — ilmoqli buralgan barg (klassik "yaprak") */
 function rumiLeafPath(ctx,L){
   ctx.moveTo(0,0);
@@ -3712,6 +3846,7 @@ const PATTERNS = [
   {id:'arabesk',  nm:'Arabesque',    cat:'B', fn:drawArabesque,th:"O'zaro to'qilgan spiral novdalar to'ri, har tutashuvda barg."},
   {id:'scroll',   nm:'Bargli novda', cat:'B', fn:drawScroll,   th:"Asosiy S-egri (kubik Bezier) + navbatlashgan yon barglar; B(t)=Σ C(3,i)(1−t)^(3−i)·t^i·P_i."},
   {id:'medallion',nm:'Medalyon',     cat:'B', fn:drawMedallion,th:"Yulduz + gul + halqa kombinatsiyasi — markaziy murakkab medalyon."},
+  {id:'oyma',     nm:"O'yma panel",   cat:'B', fn:drawOyma,     th:"Yog'och o'ymakorligi kartushi (Xiva/Farg'ona uslubi). Radial medalyon emas — TIK PANEL: yon tomonlari tik, uchlari siniq (ogee) yoy bilan yopilgan ramka; ichida o'qqa nisbatan ko'zgu-simmetrik islimiy novda. Uslubni tanitadigan uch belgi: kartush ramkasi, nuqtali fon (\"chizma\"/pargori — o'yilgan pastki qatlam) va relyef — har kontur ostiga yorug' va soya nusxasi qo'yiladi, shunda naqsh yassi chiziq emas, o'yilgan sirt bo'lib ko'rinadi. Ustun qirralari va eshik tabaqalari aynan shunday panellardan yig'iladi."},
   {id:'gi',       nm:'Girih+Islimiy',   cat:'C', fn:drawGirihIslimiy,   th:"Tashqi qatlam — girih strapwork, ichki qatlam (0.5R) — islimiy spirallar."},
   {id:'sg',       nm:'Shamsa+Girih',    cat:'C', fn:drawShamsaGirih,    th:"Tashqi shamsa medalyoni ichida girih yulduz-tugun."},
   {id:'mi',       nm:'Muqarnas+Islimiy',cat:'C', fn:drawMuqarnasIslimiy,th:"Muqarnas pog'onalari ichida islimiy novdalar."},
