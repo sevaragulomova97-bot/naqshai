@@ -6,7 +6,7 @@
    Muallif         : EGAMNAZAROVA SEVARAXON XASANBOY QIZI
    Talabnoma       : DT 202610311/2
    Fayl            : naqshai.js
-   Hajmi           : 8986 qator, 390552 belgi
+   Hajmi           : 9 008 qator (ushbu sarlavha bilan birga)
    -----------------------------------------------------------------------------
    IZOH. Ushbu matn — dasturning BOSHLANG'ICH MATNI (source code).
    U hech qanday kompilyator yoki obfuskator tomonidan qayta ishlanmagan:
