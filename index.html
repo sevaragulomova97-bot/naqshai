@@ -5008,15 +5008,34 @@ function mergeOverlaps(polys){
     }
   });
   const used = new Uint8Array(segs.length);
-  const take = k =>{
+  /* Tugundan davom ettirish uchun kesma tanlash.
+     Ilgari ro'yxatdan oxirgisi olinardi. Bu o'zini kesib o'tuvchi
+     naqshlarda (dragon: 122 947 ta to'rt tarmoqli kesishish) har
+     kesishishda boshqa tarmoqqa burilib ketardi va uzluksiz chiziq
+     minglab bo'lakka sochilardi — o'lchov: 1 764 kontur → 32 309 bo'lak.
+     Lazer uchun har bo'lak — alohida bosh ko'tarish/tushirish.
+     Endi kirish yo'nalishini eng yaxshi davom ettiradigan kesma
+     tanlanadi, ya'ni chiziq o'z tabiiy yo'lidan yuradi. */
+  const takeAt = (k, dx, dy)=>{
     const list = adj.get(k);
     if(!list) return -1;
-    while(list.length){
-      const j = list[list.length-1];
-      if(used[j]){ list.pop(); continue; }
-      return j;
+    let w = 0;
+    for(let i = 0; i < list.length; i++) if(!used[list[i]]) list[w++] = list[i];
+    list.length = w;
+    if(!w) return -1;
+    if(w === 1 || (dx === 0 && dy === 0)) return list[0];
+    const dl = Math.hypot(dx, dy) || 1;
+    let best = list[0], bestC = -Infinity;
+    for(let i = 0; i < w; i++){
+      const j = list[i], sg = segs[j];
+      const head = nk(sg[0]) === k;
+      const a = head ? sg[0] : sg[1], b = head ? sg[1] : sg[0];
+      const ex = b[0]-a[0], ey = b[1]-a[1];
+      const el = Math.hypot(ex, ey) || 1;
+      const c = (dx*ex + dy*ey)/(dl*el);
+      if(c > bestC){ bestC = c; best = j; }
     }
-    return -1;
+    return best;
   };
   const out = [];
   for(let i = 0; i < segs.length; i++){
@@ -5024,17 +5043,19 @@ function mergeOverlaps(polys){
     used[i] = 1;
     const chain = [segs[i][0], segs[i][1]];
     for(;;){
-      const k = nk(chain[chain.length-1]);
-      const j = take(k);
+      const n = chain.length, e = chain[n-1], pv = chain[n-2];
+      const j = takeAt(nk(e), e[0]-pv[0], e[1]-pv[1]);
       if(j < 0) break;
       used[j] = 1;
+      const k = nk(e);
       chain.push(nk(segs[j][0]) === k ? segs[j][1] : segs[j][0]);
     }
     for(;;){
-      const k = nk(chain[0]);
-      const j = take(k);
+      const e = chain[0], pv = chain[1];
+      const j = takeAt(nk(e), e[0]-pv[0], e[1]-pv[1]);
       if(j < 0) break;
       used[j] = 1;
+      const k = nk(e);
       chain.unshift(nk(segs[j][0]) === k ? segs[j][1] : segs[j][0]);
     }
     let closed = false;
@@ -5043,6 +5064,117 @@ function mergeOverlaps(polys){
   }
   return out;
 }
+
+/* ---------------------------------------------------------------------------
+   NUQTALARNI SODDALASHTIRISH (Douglas–Peucker)
+   ---------------------------------------------------------------------------
+   O'lchov natijasi: 120×90 mm taxtada spirograph naqshi 1 727 016 vertex
+   berardi — DXF fayli 89 MB. Lazer apparatlarining import moduli bunday
+   faylni ochmaydi yoki soatlab o'ylaydi; ochsa ham kesuvchi bosh har
+   mikron uchun to'xtab-to'xtab yuradi. Sabab — egri chiziqlar qat'iy
+   qadam bilan tekislanadi, natijada deyarli bir to'g'ri chiziqda yotgan
+   o'nlab keraksiz nuqta qoladi.
+   Douglas–Peucker aynan shu keraksiz nuqtalarni olib tashlaydi: kontur
+   shakli berilgan chegaradan (mm) ko'p og'masa, oraliq nuqta tushiriladi.
+   Boshlang'ich chegara 0.02 mm — lazerning o'z pozitsiya xatosidan
+   (~0.05 mm) va kerf kengligidan (~0.1–0.2 mm) mayda, ya'ni ko'zga ham,
+   materialga ham bilinmaydi.
+   Rekursiya emas, o'z stegi ishlatiladi: 1.2 mln nuqtali konturda
+   rekursiya chaqiruvlar stegini to'ldirib yuboradi. */
+function dpSimplify(pts, eps){
+  const n = pts.length;
+  if(n < 3 || !(eps > 0)) return pts;
+  const keep = new Uint8Array(n);
+  keep[0] = 1; keep[n-1] = 1;
+  const e2 = eps*eps;
+  const stack = [0, n-1];
+  while(stack.length){
+    const i1 = stack.pop(), i0 = stack.pop();
+    if(i1 <= i0 + 1) continue;
+    const ax = pts[i0][0], ay = pts[i0][1];
+    const dx = pts[i1][0] - ax, dy = pts[i1][1] - ay;
+    const dd = dx*dx + dy*dy;
+    let best = -1, bd = e2;
+    for(let i = i0 + 1; i < i1; i++){
+      const px = pts[i][0] - ax, py = pts[i][1] - ay;
+      let d;
+      if(dd > 0){
+        let t = (px*dx + py*dy)/dd;
+        if(t < 0) t = 0; else if(t > 1) t = 1;
+        const ex = px - dx*t, ey = py - dy*t;
+        d = ex*ex + ey*ey;
+      } else d = px*px + py*py;
+      if(d > bd){ bd = d; best = i; }
+    }
+    if(best < 0) continue;
+    keep[best] = 1;
+    stack.push(i0, best, best, i1);
+  }
+  const out = [];
+  for(let i = 0; i < n; i++) if(keep[i]) out.push(pts[i]);
+  return out;
+}
+function simplifyPolys(polys, eps){
+  const out = [];
+  for(const pl of polys){
+    if(pl.pts.length < 3){ out.push(pl); continue; }
+    if(pl.closed){
+      /* yopiq konturda oxirgi (yopuvchi) kesma ham soddalashtirilishi
+         uchun birinchi nuqta vaqtincha oxiriga qo'shiladi */
+      const s = dpSimplify(pl.pts.concat([pl.pts[0]]), eps);
+      s.pop();
+      out.push(s.length > 2 ? { pts:s, closed:true } : pl);
+    } else {
+      out.push({ pts: dpSimplify(pl.pts, eps), closed:false });
+    }
+  }
+  return out;
+}
+function countVerts(polys){
+  let n = 0;
+  for(const pl of polys) n += pl.pts.length;
+  return n;
+}
+/* ENG QISQA KESMA CHEGARASI.
+   Douglas–Peucker faqat "deyarli to'g'ri" joylarni siqadi. Fraktal
+   naqshlarda (dragon, koch) esa nuqtalar haqiqatan ham burchak yasaydi,
+   lekin ular orasidagi masofa 0.01–0.05 mm — lazer kerfi (0.1–0.2 mm)
+   dan mayda, ya'ni apparat baribir chiza olmaydi: o'lchov natijasida
+   dragon 32 310 kontur va 22 MB fayl berardi.
+   Shuning uchun oldingi saqlangan nuqtadan minSeg dan yaqin nuqtalar
+   tushiriladi. Konturning oxirgi nuqtasi doim saqlanadi — shakl uzunligi
+   qisqarmasligi uchun. */
+function decimatePts(pts, minSeg){
+  if(!(minSeg > 0) || pts.length < 3) return pts;
+  const m2 = minSeg*minSeg;
+  const out = [pts[0]];
+  let lx = pts[0][0], ly = pts[0][1];
+  for(let i = 1; i < pts.length - 1; i++){
+    const dx = pts[i][0]-lx, dy = pts[i][1]-ly;
+    if(dx*dx + dy*dy >= m2){ out.push(pts[i]); lx = pts[i][0]; ly = pts[i][1]; }
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+/* Lazer fayli uchun cheklovlar.
+   Zinapoya: avval eng mayda (ko'zga ko'rinmas) chegara sinaladi; fayl
+   apparat uchun og'ir bo'lsa, keyingi zinaga o'tiladi. Eng qo'pol zinada
+   ham og'ish 0.25 mm — 120 mm detalda 0.2%, kerf kengligidan kichik. */
+const LASER_LADDER = [
+  { eps:0.02, seg:0    },
+  { eps:0.04, seg:0.05 },
+  { eps:0.07, seg:0.08 },
+  { eps:0.10, seg:0.12 },
+  { eps:0.15, seg:0.20 },
+  { eps:0.25, seg:0.30 }
+];
+/* Vertex byudjeti. 190 000 ≈ 11 MB DXF — eski import modullari ham
+   bemalol ochadi (muammo 89 MB da boshlangan edi). Undan pastga
+   tushirilsa koch kabi fraktal naqshlarda mayda tishlar yo'qoladi
+   (o'lchov: byudjet 150 000 da koch kesish uzunligining 11.6% ini
+   yo'qotardi), shuning uchun byudjet aynan shu chegarada. */
+const LASER_VERT_MAX = 190000;
+let LASER_INFO = null;         /* oxirgi eksport statistikasi (konsol uchun) */
 
 /* Lazer eksporti uchun yakuniy geometriya:
    tekislash → taxtaga qirqish → bir xil konturlarni tashlash →
@@ -5056,16 +5188,45 @@ function laserPolys(wMm, hMm, fill){
   for(const pth of recordPattern(B.bw, B.bh, fill)){
     for(const pl of flattenCmds(pth.cmds)) if(pl.pts.length > 1) polys.push(pl);
   }
-  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, board)));
   const minU = 0.3/B.k;                         /* 0.3 mm — birlikda */
-  return merged.filter(pl=>{
+  const longEnough = pl=>{
     let L = 0;
     for(let i = 1; i < pl.pts.length; i++)
       L += Math.hypot(pl.pts[i][0]-pl.pts[i-1][0], pl.pts[i][1]-pl.pts[i-1][1]);
     if(pl.closed && pl.pts.length > 1)
       L += Math.hypot(pl.pts[0][0]-pl.pts[pl.pts.length-1][0], pl.pts[0][1]-pl.pts[pl.pts.length-1][1]);
     return L >= minU;
-  });
+  };
+  /* 1-BOSQICH — to'liq aniqlikdagi geometriyada ustma-ustlikni tozalash.
+     Bu aynan shu yerda bo'lishi shart: qo'shni plitkalarning umumiy
+     qirralari BIR XIL nuqtalar bilan chizilgan, shuning uchun ular
+     ishonchli aniqlanadi. Agar avval soddalashtirilsa, ikki nusxada
+     turli nuqtalar saqlanib qolib, qirra takrorlanadi (o'lchov: girih
+     yo'li 50 509 → 85 760 birlikka, ya'ni 70% ortiqcha kesishga
+     ko'tarilgan edi). */
+  const merged = mergeOverlaps(dedupePolys(clipPolys(polys, board)));
+  /* 2-BOSQICH — keraksiz nuqtalarni tashlash, so'ng USTMA-USTLIKNI
+     QAYTA TOZALASH. Soddalashtirish A→B→C ni A→C ga aylantiradi va
+     boshqa zanjirda ham xuddi shunday A→C paydo bo'lishi mumkin —
+     ya'ni soddalashtirishning O'ZI yangi takror kesma yaratadi
+     (o'lchov: girih 4%, panelgirih 8.4%). Ikkinchi birlashtirish
+     ularni yo'q qiladi. */
+  let res = null, step = LASER_LADDER[0];
+  for(let i = 0; i < LASER_LADDER.length; i++){
+    step = LASER_LADDER[i];
+    const segU = step.seg/B.k, epsU = step.eps/B.k;
+    const dec = step.seg > 0
+      ? merged.map(pl=>({ pts: decimatePts(pl.pts, segU), closed: pl.closed }))
+              .filter(pl=> pl.closed ? pl.pts.length > 2 : pl.pts.length > 1)
+      : merged;
+    res = mergeOverlaps(simplifyPolys(dec, epsU)).filter(longEnough);
+    if(countVerts(res) <= LASER_VERT_MAX) break;
+  }
+  LASER_INFO = { polys: res.length,
+                 verts: countVerts(res),
+                 vertsRaw: countVerts(merged),
+                 epsMm: step.eps, segMm: step.seg };
+  return res;
 }
 
 /* DXF AC1015 (AutoCAD 2000), $INSUNITS=4 (mm). sizeMm — chetma-chet o'lcham.
@@ -6235,9 +6396,10 @@ function archOutline(hw, spring, apex, n){
 }
 
 /* Ravoq atrofidagi bo'rtma band (archivolt) shakli */
-function archBandShape(ow, spring, apex, bw){
-  const outer = archOutline(ow + bw, spring, apex + bw, 44);
-  const inner = archOutline(ow, spring, apex, 44);
+function archBandShape(ow, spring, apex, bw, n){
+  n = n || 44;
+  const outer = archOutline(ow + bw, spring, apex + bw, n);
+  const inner = archOutline(ow, spring, apex, n);
   const sh = new THREE.Shape();
   sh.moveTo(-(ow + bw), 0);
   for(const q of outer) sh.lineTo(q[0], q[1]);
@@ -6284,6 +6446,70 @@ function stripFromOutline(pts, depth){
    shuning uchun bu yerda sferaning bir bo'lagi ishlatiladi. */
 function muqCellGeo(r){
   return new THREE.SphereGeometry(r, 12, 8, -Math.PI/2, Math.PI, 0, Math.PI*0.62);
+}
+
+/* ---------------------------------------------------------------------------
+   MUQARNAS TOQCHASI — HAQIQIY KATAK GEOMETRIYASI
+   ---------------------------------------------------------------------------
+   Sfera bo'lagi tashqaridan qavariq MUNCHOQ bo'lib ko'rinardi — muqarnas esa
+   aksincha: har katak ichkariga O'YILGAN toqcha, og'zi siniq ravoq shaklida,
+   ichi yarim gumbaz bilan yopiladi. Ustun boshiga qaralganda ko'z aynan
+   shu qator-qator botiq toqchalarni va ular orasidagi tik qovurg'alarni
+   ko'radi.
+   Bu yerda katak parametrik yuza sifatida quriladi:
+       c = cos(v·π/2),  s = sin(v·π/2)
+       P(u,v) = ( ox(u)·c ,  yf + (oy(u) − yf)·c ,  −d·s )
+   v = 0 da yuza aynan og'iz konturi (siniq ravoq), v = 1 da esa u bitta
+   nuqtaga — toqcha tubiga yig'iladi. Bo'ylama kesim chorak aylana bo'lgani
+   uchun tub silliq gumbaz bo'lib chiqadi, o'tkir burchak qolmaydi.
+   UV: u — og'iz bo'ylab yoy uzunligi, v — chuqurlik. Shuning uchun naqsh
+   toqcha ichiga oqib kiradi, chetida uzilmaydi. */
+function muqNicheGeo(hw, h, depth, uSeg, vSeg){
+  uSeg = uSeg || 20; vSeg = vSeg || 6;
+  const out = archOutline(hw, 0, h, Math.max(6, uSeg >> 1));
+  const n = out.length;
+  /* og'iz bo'ylab yoy uzunligi (UV uchun) */
+  const sArr = [0];
+  let tot = 0;
+  for(let i = 1; i < n; i++){
+    tot += Math.hypot(out[i][0]-out[i-1][0], out[i][1]-out[i-1][1]);
+    sArr.push(tot);
+  }
+  const yf = h*0.54;                       /* gumbaz markazi */
+  const pos = [], uv = [], idx = [];
+  for(let j = 0; j <= vSeg; j++){
+    const v = j/vSeg;
+    const c = Math.cos(v*Math.PI/2), sn = Math.sin(v*Math.PI/2);
+    for(let i = 0; i < n; i++){
+      pos.push(out[i][0]*c, yf + (out[i][1]-yf)*c, -depth*sn);
+      uv.push(sArr[i]/(tot || 1), 1 - v);
+    }
+  }
+  for(let j = 0; j < vSeg; j++){
+    for(let i = 0; i < n - 1; i++){
+      const a = j*n + i, b = a + 1, c2 = a + n, d2 = c2 + 1;
+      idx.push(a, c2, b, b, c2, d2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+/* Toqcha og'zini o'rab turuvchi QOVURG'A (ravoq yuzasi).
+   Toqchalar yonma-yon terilganda ular orasida ingichka tik qovurg'a
+   qoladi — muqarnasning o'sha tanish "asal uyasi" to'ri aynan shu.
+   Qovurg'a ravoq bandi shaklida chiqariladi. */
+function muqRibGeo(hw, h, bw, depth){
+  /* Qovurg'a MAYDA detal — u ko'zga faqat toqchalar orasidagi chiziq
+     bo'lib ko'rinadi. Shuning uchun kontur nuqtalari va qiyalik
+     bosqichlari kam olinadi: bir qovurg'a ~1500 uchburchakdan ~400 ga
+     tushdi, peshtoqda esa 78 ta qovurg'a bor. */
+  const sh = archBandShape(hw, 0, h, bw, 10);
+  return new THREE.ExtrudeGeometry(sh, {depth:depth, bevelEnabled:true,
+    bevelThickness:bw*0.45, bevelSize:bw*0.40, bevelSegments:1, curveSegments:5});
 }
 
 /* Ustun boshi uchun muqarnas — aylana bo'ylab yaruslar */
@@ -6339,6 +6565,86 @@ function corbelCap(r0, tiers, height, matA, matB, matCell){
       grp.add(cell);
     }
   }
+  return grp;
+}
+
+/* ---------------------------------------------------------------------------
+   MUQARNAS USTUN BOSHI (haqiqiy o'yma stalaktit kapiteli)
+   ---------------------------------------------------------------------------
+   Ilgari bu yerda oddiy kengayuvchi halqalar (korbel) turardi: yaxlit massa
+   berardi, lekin muqarnasga o'xshamasdi — o'yma emas, tornada aylantirilgan
+   detaldek ko'rinardi.
+   Haqiqiy muqarnas kapiteli quyidagicha ishlaydi:
+     • yaruslar yuqoriga ko'tarilgan sari tashqariga chiqadi (korbel);
+     • har yarus aylana bo'ylab bir qator TOQCHAdan iborat;
+     • qo'shni yaruslar yarim qadamga surilgan — shuning uchun ustki
+       toqchaning tubi pastki ikki toqcha orasidagi qovurg'a ustiga tushadi;
+     • yaruslar orasida ingichka javon (polka) bo'ladi — soya chizig'i
+       aynan shundan chiqadi va ko'z yaruslarni ajratadi;
+     • hamma narsa orqadan yaxlit konus tana bilan yopiladi, teshik qolmaydi.
+   Toqchalar soni har yarusda radiusga qarab hisoblanadi, shuning uchun
+   katak eni hamma yarusda deyarli bir xil bo'ladi — asl o'ymadagidek. */
+function muqarnasCapital(r0, tiers, height, matBody, matA, matB, matShelf){
+  const grp = new THREE.Group();
+  const hT = height/tiers;
+  /* Kengayish TEKIS emas: pastki yaruslar oz, yuqoridagilar ko'p chiqadi.
+     Bir xil qadamda kapitel "teskari zinapoya"dek qotib ko'rinardi;
+     o'sib boruvchi qadam esa haqiqiy stalaktit korbelning yumshoq
+     yoyilishini beradi. Yig'indi kengayish height*0.62 ga teng. */
+  const fSum = tiers > 1 ? tiers : 1;
+  const flareOf = t => height*0.62/fSum * (0.55 + 0.90*(tiers > 1 ? t/(tiers-1) : 0));
+  let rb = r0;
+  for(let t = 0; t < tiers; t++){
+    const flare = flareOf(t);
+    const rt = rb + flare;
+    const y0 = t*hT;
+    /* 1) TANA — orqadagi yaxlit konus. To'q rangda: toqcha tubi qorong'i
+       bo'lsa, o'yma chuqurligi ko'zga aniq bilinadi. */
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(rt*0.98, rb*0.98, hT*1.02, 44, 1, true), matBody);
+    body.position.y = y0 + hT/2;
+    grp.add(body);
+    /* 2) TOQCHALAR — aylana bo'ylab, qo'shni yarus yarim qadamga surilgan.
+       Katak eni yarus balandligiga yaqin (haqiqiy muqarnasda ham shunday),
+       shuning uchun radius o'sgani sari kataklar SONI ortadi, o'lchami
+       emas — naqsh miqyosi hamma yarusda bir xil qoladi. */
+    const cellW = hT*1.02;
+    const n = Math.max(7, Math.round(TAU*rt/cellW));
+    const hw = TAU*rt/n*0.5;            /* katak yarim eni — qo'shnisiga tegib turadi */
+    const hCell = hT*0.99;
+    const depth = Math.max(hw*0.95, flare*1.25);
+    const niche = muqNicheGeo(hw*0.90, hCell, depth);
+    const rib   = muqRibGeo(hw*0.90, hCell, hw*0.14, depth*0.26);
+    const mN = (t % 2) ? matB : matA;
+    const off = (t % 2) ? Math.PI/n : 0;
+    for(let i = 0; i < n; i++){
+      const a = TAU*i/n + off;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const cell = new THREE.Mesh(niche, mN);
+      cell.position.set(sa*rt, y0 + hT*0.015, ca*rt);
+      cell.rotation.y = a;              /* og'iz tashqariga qaraydi */
+      grp.add(cell);
+      const rm = new THREE.Mesh(rib, matShelf || matBody);
+      rm.position.set(sa*rt, y0 + hT*0.015, ca*rt);
+      rm.rotation.y = a;
+      grp.add(rm);
+    }
+    /* 3) JAVON — yarus tagidagi ingichka chiqiq: soya chizig'i beradi va
+       ustki qator pastkisiga "tayangan"dek ko'rinadi */
+    const shelf = new THREE.Mesh(
+      new THREE.CylinderGeometry(rt + hw*0.16, rt - flare*0.35, hT*0.055, 52),
+      matShelf || matBody);
+    shelf.position.y = y0 + hT*0.012;
+    grp.add(shelf);
+    rb = rt;
+  }
+  /* Tepa gardish — kapitelni yopadi va yostiqni ko'taradi */
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(rb + hT*0.18, rb + hT*0.02, hT*0.20, 52), matShelf || matBody);
+  top.position.y = tiers*hT + hT*0.09;
+  grp.add(top);
+  grp.userData.rTop = rb + hT*0.18;
+  grp.userData.h = tiers*hT + hT*0.19;
   return grp;
 }
 
@@ -6408,7 +6714,9 @@ function buildUstun(){
     const t = i/20;
     prof.push([R*(1 - 0.16*t + 0.055*Math.sin(Math.PI*t)), t*Hs]);
   }
-  const tana = new THREE.Mesh(latheFromProfile(prof, 1), archMat('wood', 4, 14));
+  /* Naqsh zichligi kamaytirildi (4×14 → 3×9): oldingi zichlikda o'yma
+     mato naqshidek mayda chiqib, chuqurligi ko'rinmasdi. */
+  const tana = new THREE.Mesh(latheFromProfile(prof, 1), archMat('wood', 3, 9));
   tana.position.y = 0.84; g.add(tana);
 
   /* o'yma bo'g'inlar — halqa + ingichka bronza gardish */
@@ -6422,22 +6730,33 @@ function buildUstun(){
     }
   }
 
-  /* o'yma bosh — kengayuvchi korbel + muqarnas qatori */
-  const cap = corbelCap(R*1.02, 4, 0.42,
-                        archMat('wood', 6, 1),
-                        archMat('wood', 6, 1, 0x8a4f22),
-                        archMat('wood', 1, 1, 0xc98a45));
-  cap.position.y = 3.59; g.add(cap);
+  /* MUQARNAS BOSH — o'yilgan stalaktit kapitel.
+     Toqchalar tanadan kengroq bo'lgani uchun ular ostiga silliq o'tish
+     (kova) qo'yiladi, aks holda kapitel poyada "osilib" turgandek
+     ko'rinadi. */
+  const kova = new THREE.Mesh(
+    latheFromProfile([[R*0.99,0],[R*1.02,0.05],[R*1.10,0.09],[R*1.20,0.11]], 1),
+    archMat('wood', 5, 1, 0x8a4f22));
+  kova.position.y = 3.50; g.add(kova);
 
-  /* yostiq (bracket) va tosh bosh — nozik ustunga mos, ingichka */
-  const yostiq = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.10, 0.22), archMat('wood', 3, 1));
-  yostiq.position.y = 4.11; g.add(yostiq);
-  const yostiq2 = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.07, 0.27), archMat('wood', 4, 1, 0x8a4f22));
-  yostiq2.position.y = 4.20; g.add(yostiq2);
-  const bosh = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.09, 0.31), archMat('stone'));
-  bosh.position.y = 4.28; g.add(bosh);
+  const cap = muqarnasCapital(R*1.18, 4, 0.62,
+                              archMat('wood', 8, 1, 0x6b3c17),          /* orqa tana — to'q */
+                              archMat('wood', 1, 1, 0xc9975a),          /* toqcha A */
+                              archMat('wood', 1, 1, 0xb87a3c),          /* toqcha B */
+                              archMat('wood', 6, 1, 0x8a4f22));         /* javon/qovurg'a */
+  cap.position.y = 3.61; g.add(cap);
+  const capTop = cap.position.y + (cap.userData.h || 0.52);
+  const rTop = cap.userData.rTop || R*1.9;
 
-  g.userData.h = 4.34;
+  /* yostiq (bracket) va tosh bosh — kapitel kengligiga moslashadi */
+  const yostiq = new THREE.Mesh(new THREE.BoxGeometry(rTop*1.85, 0.09, rTop*0.95), archMat('wood', 3, 1));
+  yostiq.position.y = capTop + 0.045; g.add(yostiq);
+  const yostiq2 = new THREE.Mesh(new THREE.BoxGeometry(rTop*2.15, 0.06, rTop*1.10), archMat('wood', 4, 1, 0x8a4f22));
+  yostiq2.position.y = capTop + 0.120; g.add(yostiq2);
+  const bosh = new THREE.Mesh(new THREE.BoxGeometry(rTop*2.40, 0.08, rTop*1.24), archMat('stone'));
+  bosh.position.y = capTop + 0.190; g.add(bosh);
+
+  g.userData.h = capTop + 0.24;
   return g;
 }
 
@@ -6638,16 +6957,21 @@ function buildPeshtoq(){
     const gd = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, H - 0.55, 32, 1),
                               archMat('tile', 3, Math.round((H - 0.55)/TU), 0x24518f));
     gd.position.set(gx, 0.26 + (H - 0.55)/2, gz); g.add(gd);
-    const gcap = corbelCap(0.21, 3, 0.22,
-                           archMat('tile', 1/0.12, 1/0.12, 0xbf9648),
-                           archMat('tile', 1/0.12, 1/0.12, 0x2f639f),
-                           archMat('tile', 1, 1, 0xbf9648));
-    gcap.position.set(gx, H - 0.29, gz); g.add(gcap);
+    /* Guldasta boshi ham haqiqiy muqarnas: ilgari bu yerda kengayuvchi
+       halqalar turardi va minora boshi "etak"dek ko'rinardi. */
+    const gcap = muqarnasCapital(0.20, 3, 0.27,
+                           archMat('tile', 8, 1, 0x1e4a7d),          /* orqa tana — to'q ko'k */
+                           archMat('tile', 1, 1, 0xbf9648),          /* toqcha A — oltin */
+                           archMat('tile', 1, 1, 0x2f639f),          /* toqcha B — ko'k */
+                           archMat('tile', 6, 1, 0xbf9648));         /* javon */
+    gcap.position.set(gx, H - 0.34, gz); g.add(gcap);
+    const gr = gcap.userData.rTop || 0.30;
+    const gyTop = H - 0.34 + (gcap.userData.h || 0.27);
     /* muqarnas ustidagi gardish — bosh yaxlit ko'rinsin */
-    const gring = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.24, 0.06, 28), archMat('stone'));
-    gring.position.set(gx, H - 0.02, gz); g.add(gring);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.25, 0.16, 28), archMat('stone'));
-    top.position.set(gx, H + 0.06, gz); g.add(top);
+    const gring = new THREE.Mesh(new THREE.CylinderGeometry(gr*0.98, gr, 0.06, 32), archMat('stone'));
+    gring.position.set(gx, gyTop + 0.03, gz); g.add(gring);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(gr*0.86, gr*0.98, 0.16, 32), archMat('stone'));
+    top.position.set(gx, gyTop + 0.14, gz); g.add(top);
   }
 
   /* 7) yelka medalyonlari */
@@ -6932,6 +7256,86 @@ function makeArchTileCanvas(){
   }catch(e){ console.warn('[3d] rapport', e); }
   return makePatternTexture();
 }
+/* ---------------------------------------------------------------------------
+   O'YMA EFFEKTI — NAQSHDAN NORMAL XARITA
+   ---------------------------------------------------------------------------
+   Ilgari naqsh ob'yektga faqat RANG (map + emissiveMap) sifatida qo'yilardi.
+   Shuning uchun ustun "bo'yalgan" ko'rinardi: yorug'lik naqsh chizig'ida
+   sinmaydi, soya tushmaydi — o'yma sezilmaydi.
+   Bu yerda naqsh tasviridan balandlik xaritasi olinadi (yorqinlik: och joy
+   — ko'tarilgan yuza, to'q joy — o'yilgan chuqurcha), so'ng Sobel bilan
+   sirt normali hisoblanadi. Natijada yorug'lik har chiziq qirrasida
+   sinadi va yuza haqiqatan o'yilgandek ko'rinadi.
+   Balandlik oldindan biroz xiralashtiriladi: aks holda bir piksellik
+   chiziqlar o'tkir "tunuka" qirra beradi, o'yma esa yumshoq qirrali. */
+function makeNormalCanvas(src, strength){
+  const W = src.width, H = src.height;
+  const sc = document.createElement('canvas');
+  sc.width = W; sc.height = H;
+  const sx = sc.getContext('2d');
+  if(!sx) return null;
+  sx.drawImage(src, 0, 0);
+  let d;
+  try{ d = sx.getImageData(0, 0, W, H).data; }catch(e){ return null; }
+  /* yorqinlik → balandlik */
+  const h = new Float32Array(W*H);
+  for(let i = 0, n = W*H; i < n; i++){
+    const o = i*4;
+    h[i] = (0.299*d[o] + 0.587*d[o+1] + 0.114*d[o+2])/255;
+  }
+  /* 3×3 silliqlash — chekkalar takrorlanuvchi (rapport uzilmasin) */
+  const hb = new Float32Array(W*H);
+  const at = (x, y)=> h[((y % H) + H) % H * W + (((x % W) + W) % W)];
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    hb[y*W+x] = (at(x-1,y-1) + 2*at(x,y-1) + at(x+1,y-1) +
+                 2*at(x-1,y)  + 4*at(x,y)   + 2*at(x+1,y) +
+                 at(x-1,y+1) + 2*at(x,y+1) + at(x+1,y+1))/16;
+  }
+  const bt = (x, y)=> hb[((y % H) + H) % H * W + (((x % W) + W) % W)];
+  const out = sx.createImageData(W, H);
+  const od = out.data;
+  const k = (strength === undefined ? 2.6 : strength);
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    /* Sobel */
+    const gx = (bt(x+1,y-1) + 2*bt(x+1,y) + bt(x+1,y+1)) -
+               (bt(x-1,y-1) + 2*bt(x-1,y) + bt(x-1,y+1));
+    const gy = (bt(x-1,y+1) + 2*bt(x,y+1) + bt(x+1,y+1)) -
+               (bt(x-1,y-1) + 2*bt(x,y-1) + bt(x+1,y-1));
+    let nx = -gx*k, ny = -gy*k, nz = 1;
+    const l = Math.sqrt(nx*nx + ny*ny + 1) || 1;
+    nx /= l; ny /= l; nz /= l;
+    const o = (y*W + x)*4;
+    od[o]   = (nx*0.5 + 0.5)*255;
+    od[o+1] = (ny*0.5 + 0.5)*255;
+    od[o+2] = (nz*0.5 + 0.5)*255;
+    od[o+3] = 255;
+  }
+  sx.putImageData(out, 0, 0);
+  return sc;
+}
+/* O'yilgan joy yaltiramaydi — chuqurchada chang va g'adir-budurlik ko'p.
+   Balandlik xaritasidan g'adirlik xaritasi: och (ko'tarilgan) joy
+   silliqroq, to'q (o'yilgan) joy g'adirroq. */
+function makeRoughCanvas(src, lo, hi){
+  const W = src.width, H = src.height;
+  const sc = document.createElement('canvas');
+  sc.width = W; sc.height = H;
+  const sx = sc.getContext('2d');
+  if(!sx) return null;
+  sx.drawImage(src, 0, 0);
+  let img;
+  try{ img = sx.getImageData(0, 0, W, H); }catch(e){ return null; }
+  const d = img.data;
+  const a = (lo === undefined ? 0.34 : lo), b = (hi === undefined ? 0.86 : hi);
+  for(let i = 0, n = W*H; i < n; i++){
+    const o = i*4;
+    const v = (0.299*d[o] + 0.587*d[o+1] + 0.114*d[o+2])/255;
+    const r = Math.round((b + (a - b)*v)*255);   /* och → a, to'q → b */
+    d[o] = d[o+1] = d[o+2] = r; d[o+3] = 255;
+  }
+  sx.putImageData(img, 0, 0);
+  return sc;
+}
 function update3DTexture(){
   if(!threeReady || !T3 || !T3.mat) return;
   const tex = new THREE.CanvasTexture(makePatternTexture());
@@ -6967,17 +7371,45 @@ function update3DTexture(){
   base.wrapS = base.wrapT = THREE.RepeatWrapping;
   base.anisotropy = 8;
   if(THREE.sRGBEncoding !== undefined) base.encoding = THREE.sRGBEncoding;
+  /* O'YMA: naqshdan normal va g'adirlik xaritalari. Bitta marta
+     hisoblanadi va hamma me'moriy material baham ko'radi (faqat
+     repeat har materialda o'ziniki, shuning uchun nusxa olinadi). */
+  const nCnv = makeNormalCanvas(cnv, 2.6);
+  const rCnv = makeRoughCanvas(cnv, 0.34, 0.88);
+  const nBase = nCnv ? new THREE.CanvasTexture(nCnv) : null;
+  const rBase = rCnv ? new THREE.CanvasTexture(rCnv) : null;
+  for(const t of [nBase, rBase]) if(t){
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;   /* normal/rough — chiziqli fazo, encoding qo'yilmaydi */
+  }
   for(const m of arch){
     const rep = m.userData.rep || [1, 1];
     const t2 = base.clone();
     t2.needsUpdate = true;
     t2.wrapS = t2.wrapT = THREE.RepeatWrapping;
     t2.repeat.set(rep[0], rep[1]);
-    const prev = m.map;
+    const prev = m.map, prevN = m.normalMap, prevR = m.roughnessMap;
     m.map = t2;
     if(m.emissive) m.emissiveMap = t2;
+    if(nBase){
+      const tn = nBase.clone();
+      tn.needsUpdate = true;
+      tn.wrapS = tn.wrapT = THREE.RepeatWrapping;
+      tn.repeat.set(rep[0], rep[1]);
+      m.normalMap = tn;
+      /* o'yma chuqurligi — yog'ochda chuqurroq, koshinda yuzaroq */
+      const dp = m.userData.carve === undefined ? 1 : m.userData.carve;
+      m.normalScale = new THREE.Vector2(dp, dp);
+    }
+    if(rBase){
+      const tr = rBase.clone();
+      tr.needsUpdate = true;
+      tr.wrapS = tr.wrapT = THREE.RepeatWrapping;
+      tr.repeat.set(rep[0], rep[1]);
+      m.roughnessMap = tr;
+    }
     m.needsUpdate = true;
-    if(prev && prev.dispose) prev.dispose();
+    for(const q of [prev, prevN, prevR]) if(q && q.dispose) q.dispose();
   }
 }
 const PAINT = { raf:0, active:false };
@@ -7106,7 +7538,15 @@ function setObject(kind){
   if(!ARCH_KINDS[kind]) T3.archMats = [];
   if(kind==='lagan') obj.rotation.x = 0.5;   /* lagan yuzi tomoshabinga qaragan */
   if(kind==='panel') obj.rotation.x = 0;
-  obj.traverse ? obj.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = false; } })
+  /* Me'moriy ob'yektlar O'ZIGA soya tashlaydi: muqarnas yaruslari,
+     ravoq bandlari va o'yma toqchalar chuqurligi aynan shu ichki
+     soyadan o'qiladi. Ilgari bu yerda receiveShadow hammaga false
+     qilinardi va buildArch qo'ygan qiymatni bekor qilardi — natijada
+     kapitel yassi, "bo'yalgan" ko'rinardi.
+     Yakka buyumlarda (lagan, ko'za) ichki soya kerak emas — ular yaxlit
+     yuza, o'ziga soya tushirsa faqat shovqin chiqadi. */
+  const selfShadow = !!ARCH_KINDS[kind];
+  obj.traverse ? obj.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = selfShadow; } })
                : (obj.castShadow = true);
   T3.mesh = obj;
   obj.scale.setScalar(0.01);
@@ -7140,11 +7580,18 @@ function init3D(){
   const key = new THREE.DirectionalLight(0xffffff, 1.25);
   key.position.set(3, 5, 4);
   key.castShadow = true;
-  key.shadow.mapSize.width = 1024;
-  key.shadow.mapSize.height = 1024;
+  /* Soya xaritasi 2048: 1024 da 8×8 maydonga 128 teksel/birlik tushardi,
+     ya'ni bitta muqarnas katagiga ~19 teksel — o'yma ichidagi soya
+     "pog'ona-pog'ona" chiqib, chuqurlik o'rniga shovqin berardi.
+     bias/normalBias — egri yuzalarda o'z-o'ziga soya tushirish
+     artefaktini (shadow acne) yo'qotadi. */
+  key.shadow.mapSize.width = 2048;
+  key.shadow.mapSize.height = 2048;
   key.shadow.camera.near = 1; key.shadow.camera.far = 15;
   key.shadow.camera.left = -4; key.shadow.camera.right = 4;
   key.shadow.camera.top = 4; key.shadow.camera.bottom = -4;
+  key.shadow.bias = -0.0005;
+  if(key.shadow.normalBias !== undefined) key.shadow.normalBias = 0.015;
   const fillL = new THREE.DirectionalLight(0xffffff, 0.5);
   fillL.position.set(-4, 1.5, -3);
   scene.add(amb, hemi, key, fillL);

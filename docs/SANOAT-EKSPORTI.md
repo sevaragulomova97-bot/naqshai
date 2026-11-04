@@ -128,6 +128,61 @@ Oddiy matn: faqat `moveto` / `lineto` va `stroke`. Birlik — PostScript
 punkti (1 pt = 0.352778 mm), `%%BoundingBox` aynan detal o'lchamiga teng,
 `showpage` yo'q (EPS talabi). Qizil hairline — kesish konturi.
 
+### Fayl hajmi va kesuvchi bosh yo'li
+
+To'liq nazorat (41 naqsh × 2 rejim × DXF/EPS = 82 holat, 120×90 mm) uchta
+amaliy nuqsonni ko'rsatdi va uchalasi ham tuzatildi.
+
+**1. Fayl hajmining portlashi.** `spirograph` naqshi 1 727 016 vertex va
+**89.5 MB** DXF berardi — lazer apparatining import moduli bunday faylni
+ochmaydi. Sabab: egri chiziqlar qat'iy qadam bilan tekislanadi va deyarli
+bir to'g'ri chiziqda yotgan o'nlab keraksiz nuqta qoladi. Yechim —
+**Douglas–Peucker** soddalashtirish, chegara 0.02 mm (lazerning o'z
+pozitsiya xatosi ~0.05 mm, kerf 0.1–0.2 mm — ya'ni ko'zga ham, materialga
+ham bilinmaydi).
+
+**2. Lazer aniqligidan mayda kesmalar.** Fraktal naqshlarda (`dragon`,
+`koch`) nuqtalar haqiqatan burchak yasaydi, lekin ular orasi 0.01–0.05 mm —
+apparat baribir chiza olmaydi. Vertex byudjeti (190 000) oshsa, oldingi
+nuqtadan `minSeg` dan yaqin nuqtalar tushiriladi. Zinapoya eng qo'pol
+pog'onada ham 0.25 mm — 120 mm detalda 0.2%, kerfdan kichik.
+
+**3. Uzluksiz chiziqning parchalanishi.** Kesmalarni zanjirlashda har
+tugundan ro'yxatdagi oxirgi kesma olinardi. `dragon` naqshida 122 947 ta
+to'rt tarmoqli kesishish bor — natijada zanjirlash har kesishishda boshqa
+tarmoqqa burilib, **1 764 kontur 32 309 bo'lakka** sochilardi (har bo'lak —
+alohida bosh ko'tarish/tushirish). Endi kirish yo'nalishini eng yaxshi
+davom ettiradigan kesma tanlanadi: **11 878 bo'lak** (−63%), 2 nuqtali
+parchalar butunlay yo'qoldi, kesish uzunligi esa o'zgarmadi.
+
+**Tartib muhim.** Ustma-ustlik ikki marta tozalanadi:
+`qirqish → takror konturlar → BIRLASHTIRISH → soddalashtirish →
+QAYTA BIRLASHTIRISH`.
+
+- Agar soddalashtirish birlashtirishdan **oldin** turса, qo'shni
+  plitkalarning umumiy qirrasi ikki nusxada turli nuqtalar bilan qolib,
+  qirra takrorlanadi (girih yo'li 50 509 → 85 760 birlik, ya'ni 70%
+  ortiqcha kesish).
+- Agar **keyin** tursa-yu qayta birlashtirilmasa, soddalashtirishning o'zi
+  yangi takror kesma yaratadi: A→B→C ni A→C ga aylantiradi va boshqa
+  zanjirda ham xuddi shunday A→C paydo bo'ladi (girih 4%, panelgirih 8.4%).
+
+Ikki bosqichli birlashtirish ikkala xatoni ham yopadi.
+
+**Yakuniy o'lchov (82 holat):**
+
+| Ko'rsatkich | Oldin | Keyin |
+|---|---|---|
+| Eng katta DXF | 89.46 MB | **10.21 MB** |
+| Xato bilan tugagan holat | 11 | **0** |
+| Ikki marta kesiladigan yo'l | 0–8.4% | **0%** |
+| Shakl og'ishi (Hausdorff) | — | **≤ 0.09 mm** (kerfdan kichik) |
+| Soddalashtirish zinapoyasiga chiqqan naqsh | — | **1 / 41** |
+
+Kesish uzunligining kamayishi (sierpinski −14.4%, panelgirih −9.7%) shakl
+og'ishi **0.0000 mm** bilan birga keladi: bu yo'qolgan detal emas, aynan
+ikki marta kesilayotgan joylar.
+
 ### Sirt fakturasi vektorga tushmaydi
 
 «O'yma panel» naqshidagi nuqtali fon va relyef (yorug'-soya nusxalari)
@@ -260,6 +315,76 @@ Ikki qat'iy shart:
 
 AR'da gilam va pol sirtlari ham chok-suz maydondan yig'iladi. Ilgari u yerda
 medalyon 3×3 qilib takrorlanar va plitkalar orasida uzilish ko'rinardi.
+
+### O'yma effekti (ustun, darvoza, peshtoq)
+
+Ilgari naqsh me'moriy qismlarga faqat **rang** sifatida qo'yilardi
+(`map` + `emissiveMap`). Shuning uchun ustun *bo'yalgan* ko'rinardi:
+yorug'lik naqsh chizig'ida sinmaydi, soya tushmaydi — o'yma sezilmaydi.
+
+Endi bitta rapport tasviridan uchta xarita chiqariladi:
+
+| Xarita | Qanday olinadi | Nima beradi |
+|---|---|---|
+| `map` | rapportning o'zi | rang |
+| `normalMap` | yorqinlik → balandlik → 3×3 silliqlash → **Sobel** | yorug'lik har chiziq qirrasida sinadi |
+| `roughnessMap` | och joy silliq (0.34), to'q joy g'adir (0.88) | o'yilgan chuqurcha yaltiramaydi |
+
+Balandlik oldindan silliqlanadi (aks holda bir piksellik chiziqlar o'tkir
+«tunuka» qirra beradi), chekkalar esa takrorlanuvchi olinadi — rapport
+uzilmasin. Narxi: 256×256 rapport uchun **~20 ms**, to'liq tekstura
+yangilash **22–63 ms**.
+
+**Ichki soya.** `setObject()` hamma mesh uchun `receiveShadow = false`
+qo'yib, `buildArch()` qo'ygan qiymatni bekor qilardi — muqarnas yaruslari
+bir-biriga soya tashlamas, kapitel yassi ko'rinardi. Endi me'moriy
+ob'yektlar o'ziga soya tashlaydi (yakka buyumlarda — laganda, ko'zada —
+kerak emas, u yerda faqat shovqin chiqadi). Soya xaritasi 1024 → **2048**:
+1024 da 8×8 maydonga 128 teksel/birlik tushib, bitta muqarnas katagiga
+atigi ~19 teksel to'g'ri kelardi.
+
+### Muqarnas kapiteli
+
+Ustun boshi qayta qurildi. Ilgari u kengayuvchi halqalar (korbel) edi —
+yaxlit massa berardi, lekin muqarnasga o'xshamasdi.
+
+Endi har katak — **ichkariga o'yilgan toqcha**: og'zi siniq (to'rt markazli)
+ravoq, ichi yarim gumbaz. Parametrik yuza:
+
+```
+c = cos(v·π/2),  s = sin(v·π/2)
+P(u,v) = ( ox(u)·c ,  yf + (oy(u) − yf)·c ,  −d·s )
+```
+
+`v = 0` da yuza aynan og'iz konturi, `v = 1` da bitta nuqtaga — toqcha
+tubiga yig'iladi. Bo'ylama kesim chorak aylana bo'lgani uchun tub silliq
+gumbaz bo'lib chiqadi, o'tkir burchak qolmaydi. UV: `u` — og'iz bo'ylab yoy
+uzunligi, `v` — chuqurlik, shuning uchun naqsh toqcha ichiga oqib kiradi.
+
+Yig'ilishi haqiqiy o'ymadagidek:
+
+- yaruslar yuqoriga ko'tarilgan sari tashqariga chiqadi, qadam **o'sib
+  boradi** (bir xil qadamda kapitel «teskari zinapoya»dek qotib ko'rinardi);
+- qo'shni yaruslar yarim qadamga surilgan — ustki toqchaning tubi pastki
+  ikki toqcha orasidagi qovurg'a ustiga tushadi;
+- katak eni yarus balandligiga teng, shuning uchun radius o'sgani sari
+  kataklar **soni** ortadi, o'lchami emas — naqsh miqyosi hamma yarusda
+  bir xil;
+- yaruslar orasida ingichka javon — soya chizig'i shundan chiqadi;
+- orqada to'q rangli yaxlit konus: teshik ko'rinmaydi, toqcha tubi
+  qorong'i bo'lgani uchun chuqurlik aniq bilinadi.
+
+Guldasta (peshtoq burchak minoralari) boshi ham shu kapitelga o'tkazildi.
+
+**Poligon narxi.** Boshlab yuborilgan variant peshtoqda 329 909 uchburchak
+berdi — telefon uchun og'ir. Qovurg'a (kataklar orasidagi chiziq) mayda
+detal bo'lgani uchun uning kontur nuqtalari va qiyalik bosqichlari
+kamaytirildi (~1500 → ~400 uchburchak, peshtoqda 78 ta qovurg'a bor):
+
+| Ob'yekt | Oldin | Keyin |
+|---|---|---|
+| Ustun | 167 044 | **47 524** |
+| Peshtoq | 329 909 | **86 885** |
 
 ## Amaliy maslahat
 
