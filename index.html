@@ -2408,23 +2408,627 @@ function drawFriezeComposition(ctx,S,p){
     dot(ctx, x, S*0.815, p.sw*0.7, pal.c[0]);
   }
 }
-/* ============================================================
-   C. KOMBINATSIYALAR (4) — tashqi uslub + ichki uslub (0.5R)
-   ============================================================ */
-function makeCombo(fA,fB){
-  return function(ctx,R,p,sw,c0,c1,c2,c3){
-    fA(ctx,R,p,sw,c0,c1,c2,c3);
-    ctx.save();
-    ctx.scale(0.5,0.5);
-    ctx.rotate(Math.PI/Math.max(3,p.sym));
-    fB(ctx,R,p,sw*1.7,c1,c0,c3,c2);
-    ctx.restore();
-  };
+/* ============================================================================
+   C. KOMBINATSIYALAR — QATLAM-KATAK KOMPOZITSIYASI
+   ----------------------------------------------------------------------------
+   NEGA ESKI USUL YARAMASDI. Ilgari bu yerda makeCombo(fA,fB) turardi: A
+   naqsh to'liq R da chizilar, so'ng B naqsh 0.5 masshtabda uning USTIGA
+   qo'yilardi. Bu kompozitsiya emas — ikki rasmni ustma-ust tashlash:
+     · ikki tizim o'rtasida hech qanday geometrik bog'liqlik yo'q —
+       girih yulduzining markazi islimiy novdasining boshlanishiga
+       tushmaydi;
+     · ichki naqsh tashqisini berkitadi, qaysi biri zamin, qaysi biri
+       naqsh ekani o'qilmaydi;
+     · 0.5 koeffitsienti ixtiyoriy — miqyoslar orasida nisbat yo'q.
+
+   HAQIQIY TEMURIY KOMPOZITSIYASI QANDAY ISHLAYDI. Samarqand, Buxoro va
+   Hirot yodgorliklarida geometrik va o'simliksimon tizimlar RAQOBAT
+   QILMAYDI, ular IYERARXIYA tashkil etadi:
+     1. girih (yoki xatam, shamsa) — SKELET: u tekislikni yopiq
+        KATAKLARGA bo'ladi;
+     2. har katak o'z SHAKLIGA ko'ra tasniflanadi va bir xil shakl doim
+        bir xil ishlov oladi — kompozitsiya shundan "o'ylangan" bo'lib
+        ko'rinadi;
+     3. islimiy/rumi — TO'LDIRISH: u katakning ichiga, aynan o'sha
+        katakning shakliga moslab o'stiriladi va chegaradan chiqmaydi;
+     4. lenta (band) eng ustida, eng qalin va eng to'q — ko'z avval
+        geometriyani, keyin o'simlikni o'qiydi.
+
+   QUYIDA SHU TO'RT BOSQICH AMALGA OSHIRILGAN. Har kombinatsiya uchun
+   skelet KATAKLAR RO'YXATINI qaytaradi, kompozitor esa ularni
+   to'ldiradi va lentani ustidan chizadi.
+   ============================================================================ */
+
+/* --- 0) ISLIMIY LUG'ATI — URINMA YOYLAR ZANJIRI --------------------------
+   Haqiqiy islimiyda novda LOGARIFMIK SPIRAL emas: u bir-biriga urinma
+   doira yoylaridan tuzilgan zanjir bo'lib, egrilik ishorasi navbat bilan
+   almashadi. Shu sababli chiziq uzluksiz "oqadi" va hech qayerda o'ziga
+   o'ralib qolmaydi. Logarifmik spiral esa markazga tomon cheksiz
+   zichlashadi — ilgari aynan shu sababdan markazda chalkash dog' hosil
+   bo'lardi.
+   Zanjir integrallash bilan quriladi: har bo'lakda uzunlik `len` va
+   TO'LIQ burilish `turn` beriladi, yo'nalish esa qadamma-qadam o'zgaradi.
+   turn ishorasini almashtirish S-egri beradi — islimiyning asosiy harfi. */
+function arcChainPts(x, y, a, segs){
+  const pts = [[x, y]];
+  let cx = x, cy = y, ca = a;
+  for(const sg of segs){
+    const n = Math.max(5, Math.round(sg.n || 16));
+    const dl = sg.len/n, dk = sg.turn/n;
+    for(let i = 0; i < n; i++){
+      ca += dk;
+      cx += Math.cos(ca)*dl; cy += Math.sin(ca)*dl;
+      pts.push([cx, cy]);
+    }
+  }
+  return pts;
 }
-function drawGirihIslimiy(ctx,R,p,sw,c0,c1,c2,c3){ makeCombo(drawGirih,drawIslimiy)(ctx,R,p,sw,c0,c1,c2,c3); }
-function drawShamsaGirih(ctx,R,p,sw,c0,c1,c2,c3){ makeCombo(drawShamsa,drawGirih)(ctx,R,p,sw,c0,c1,c2,c3); }
-function drawMuqarnasIslimiy(ctx,R,p,sw,c0,c1,c2,c3){ makeCombo(drawMuqarnas,drawIslimiy)(ctx,R,p,sw,c0,c1,c2,c3); }
-function drawXatamRumi(ctx,R,p,sw,c0,c1,c2,c3){ makeCombo(drawXatam,drawRumi)(ctx,R,p,sw,c0,c1,c2,c3); }
+/* TORAYUVCHI TASMA — islimiyning asosiy shakli.
+   Ma'lumotnoma asarlarda (Hirot va Buxoro kitobat naqshlari, yog'och
+   o'ymakorligi) novda INGICHKA CHIZIQ emas: u asosda keng, uchiga borib
+   nolga toraydigan TO'LDIRILGAN tasma. Aynan shu toraygan silueт naqshga
+   "o'sayotgan" ko'rinish beradi. Markaziy chiziqdan ikki tomonga ofset
+   olinib, yopiq kontur quriladi. */
+function taperRibbonPath(ctx, pts, w0, w1, pow){
+  const n = pts.length;
+  if(n < 2) return;
+  const Lh = [], Rh = [];
+  for(let i = 0; i < n; i++){
+    const a = pts[Math.max(0, i-1)], b = pts[Math.min(n-1, i+1)];
+    let dx = b[0]-a[0], dy = b[1]-a[1];
+    const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+    const t = i/(n-1);
+    const w = w0 + (w1-w0)*Math.pow(t, pow || 1);
+    Lh.push([pts[i][0] - dy*w, pts[i][1] + dx*w]);
+    Rh.push([pts[i][0] + dy*w, pts[i][1] - dx*w]);
+  }
+  ctx.moveTo(Lh[0][0], Lh[0][1]);
+  for(let i = 1; i < n; i++) ctx.lineTo(Lh[i][0], Lh[i][1]);
+  for(let i = n-1; i >= 0; i--) ctx.lineTo(Rh[i][0], Rh[i][1]);
+  ctx.closePath();
+}
+function taperRibbon(ctx, pts, w0, w1, fillC, edgeC, sw, pow){
+  ctx.beginPath(); taperRibbonPath(ctx, pts, w0, w1, pow);
+  fillA(ctx, fillC, 0.95);
+  st(ctx, edgeC, sw);
+}
+/* TOMCHI (bargak) — bir uchi o'tkir, ikkinchisi yumaloq yaxlit shakl.
+   Ma'lumotnomadagi islimiyning eng ko'p uchraydigan elementi. */
+function tearPath(ctx, x, y, ang, L, W){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(L*0.18, -W, L*0.70, -W*0.92, L, 0);
+  ctx.bezierCurveTo(L*0.70,  W*0.92, L*0.18,  W, 0, 0);
+  ctx.restore();
+}
+function tearDrop(ctx, x, y, ang, L, W, fillC, edgeC, sw){
+  ctx.beginPath(); tearPath(ctx, x, y, ang, L, W);
+  fillA(ctx, fillC, 0.95); st(ctx, edgeC, sw);
+}
+/* PALMETTA — uch yoki besh bo'lakli yaxlit gul. Bo'laklar TO'LDIRILGAN
+   tomchilar, o'rtadagisi eng uzun. Novda shu bilan tugaydi. */
+function palmetteFan(ctx, x, y, ang, L, lobes, fillC, edgeC, sw){
+  lobes = lobes || 3;
+  const half = (lobes-1)/2;
+  for(let i = 0; i < lobes; i++){
+    const k = i - half;
+    const da = k*(0.62/Math.max(1, half));
+    const f = 1 - Math.abs(k)/(half + 1.1)*0.45;
+    tearDrop(ctx, x, y, ang + da, L*f, L*f*0.30,
+             k === 0 ? fillC : lerpColor(fillC, edgeC, 0.20), edgeC, sw);
+  }
+}
+/* GAJAK — uchi o'ralgan toraygan tasma. Islimiyning ikkinchi asosiy harfi. */
+function curlArm(ctx, x, y, ang, L, w, turn, fillC, edgeC, sw){
+  const pts = arcChainPts(x, y, ang, [
+    { len:L*0.55, turn: turn*0.55 },
+    { len:L*0.45, turn: turn*1.25 }
+  ]);
+  taperRibbon(ctx, pts, w, w*0.06, fillC, edgeC, sw, 1.35);
+  return pts;
+}
+
+/* Egri chiziqni KATAK ichiga sig'dirish: amplituda bosqichma-bosqich
+   kamaytiriladi, toki butun zanjir chegara ichida qolguncha. Shu tufayli
+   to'ldirish katakni to'la egallaydi, lekin lentadan oshmaydi. */
+function fitInCell(poly, make, amp0, pad){
+  let amp = amp0;
+  for(let it = 0; it < 8; it++){
+    const pts = make(amp);
+    let ok = true;
+    /* Birinchi nuqta — LANGAR: u ataylab katak tubiga, ya'ni burchakka
+       yaqin qo'yiladi va u yerda chegaragacha masofa tabiiy ravishda
+       kichik. Agar u ham tekshirilsa, shart hech qachon bajarilmaydi va
+       amplituda nolga tushib, novda ko'rinmay qoladi — aynan shu xato
+       birinchi urinishda bo'lgan edi. */
+    for(let i = 1; i < pts.length; i++){
+      const q = pts[i];
+      if(!pointInPoly(q, poly) || distToPoly(q, poly) < pad){ ok = false; break; }
+    }
+    if(ok) return pts;
+    amp *= 0.82;
+  }
+  return make(amp);
+}
+/* Katak o'qi bo'ylab YETARLI JOY bor nuqtani topish — novda shu yerdan
+   boshlanadi, shunda u burchakka qisilib qolmaydi. */
+function axisStart(poly, base, dx, dy, L, need){
+  for(let t = 0.06; t <= 0.5; t += 0.04){
+    const q = [base[0] + dx*L*t, base[1] + dy*L*t];
+    if(pointInPoly(q, poly) && distToPoly(q, poly) >= need) return { p:q, t:t };
+  }
+  return { p:[base[0] + dx*L*0.22, base[1] + dy*L*0.22], t:0.22 };
+}
+function pointInPoly(pt, poly){
+  let inside = false;
+  for(let i = 0, j = poly.length-1; i < poly.length; j = i++){
+    const a = poly[i], b = poly[j];
+    if(((a[1] > pt[1]) !== (b[1] > pt[1])) &&
+       (pt[0] < (b[0]-a[0])*(pt[1]-a[1])/((b[1]-a[1])||1e-9) + a[0])) inside = !inside;
+  }
+  return inside;
+}
+
+/* --- 1) KATAK GEOMETRIYASI -------------------------------------------------
+   Og'irlik markazi, ichki radius va qirralarning ichkariga qaragan
+   normallari. To'ldirish shular asosida o'lchab joylashtiriladi. */
+function cellInfo(poly){
+  const n = poly.length;
+  let A = 0, cx = 0, cy = 0;
+  for(let i = 0; i < n; i++){
+    const P = poly[i], Q = poly[(i+1)%n];
+    const cr = P[0]*Q[1] - Q[0]*P[1];
+    A += cr; cx += (P[0]+Q[0])*cr; cy += (P[1]+Q[1])*cr;
+  }
+  A /= 2;
+  if(Math.abs(A) < 1e-9){
+    cx = 0; cy = 0;
+    for(const P of poly){ cx += P[0]; cy += P[1]; }
+    cx /= n; cy /= n;
+  } else { cx /= (6*A); cy /= (6*A); }
+  let rin = Infinity;
+  for(let i = 0; i < n; i++){
+    const P = poly[i], Q = poly[(i+1)%n];
+    const ex = Q[0]-P[0], ey = Q[1]-P[1], L = Math.hypot(ex,ey) || 1;
+    const d = Math.abs((ex*(cy-P[1]) - ey*(cx-P[0]))/L);
+    if(d < rin) rin = d;
+  }
+  return { C:[cx,cy], rin: isFinite(rin) ? rin : 0, area: Math.abs(A) };
+}
+/* Nuqtadan katak chegarasigacha masofa — barg uzunligini shu belgilaydi,
+   shuning uchun barg hech qachon lentadan oshib ketmaydi. */
+function distToPoly(pt, poly){
+  let best = Infinity;
+  for(let i = 0; i < poly.length; i++){
+    const P = poly[i], Q = poly[(i+1)%poly.length];
+    const ex = Q[0]-P[0], ey = Q[1]-P[1], dd = ex*ex + ey*ey;
+    let t = dd > 0 ? ((pt[0]-P[0])*ex + (pt[1]-P[1])*ey)/dd : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const d = Math.hypot(pt[0]-P[0]-ex*t, pt[1]-P[1]-ey*t);
+    if(d < best) best = d;
+  }
+  return best;
+}
+/* Katakning eng uzun diagonali — novda shu o'q bo'ylab o'sadi. */
+function cellAxis(poly){
+  let a = poly[0], b = poly[1], best = -1;
+  for(let i = 0; i < poly.length; i++){
+    for(let j = i+1; j < poly.length; j++){
+      const d = Math.hypot(poly[i][0]-poly[j][0], poly[i][1]-poly[j][1]);
+      if(d > best){ best = d; a = poly[i]; b = poly[j]; }
+    }
+  }
+  /* markazdan uzoqroq uchi — novdaning UCHI bo'ladi */
+  if(Math.hypot(a[0],a[1]) > Math.hypot(b[0],b[1])){ const t = a; a = b; b = t; }
+  return { base:a, tip:b, len:best };
+}
+
+/* --- 2) KATAK ICHIGA MOSLASHGAN MOTIV --------------------------------------
+   SODDALIK QOIDASI. Ma'lumotnoma asarlarda bir katakka O'NLAB mayda
+   bargcha emas, BITTA yirik, o'qqa nisbatan ko'zgu-simmetrik motiv
+   joylashtiriladi: o'rtada palmetta, yonlarda ikki gajak. Shakllar
+   to'ldirilgan va kontur bilan chegaralangan — shuning uchun ular
+   uzoqdan ham o'qiladi va bo'sh zamin saqlanib qoladi.
+   Ilgari bu yerda ingichka chiziqlar va sochma barglar chizilardi;
+   natija "chizmachilik mashqi"ga o'xshardi, san'at asariga emas. */
+function vineInCell(ctx, poly, o){
+  const ax = cellAxis(poly);
+  if(!(ax.len > 1e-6)) return;
+  const L = ax.len, pad = o.sw*1.1;
+  const ci = cellInfo(poly);
+  if(ci.rin < pad*2.2) return;
+  const dx = (ax.tip[0]-ax.base[0])/L, dy = (ax.tip[1]-ax.base[1])/L;
+  const a0 = Math.atan2(dy, dx);
+  const st0 = axisStart(poly, ax.base, dx, dy, L, Math.min(ci.rin*0.55, o.sw*2.2));
+  const bx = st0.p[0], by = st0.p[1];
+  const Lr = L*(1 - st0.t);
+  ctx.save();
+  ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
+  const wStem = Math.min(ci.rin*0.26, Lr*0.055);
+  /* 1) MARKAZIY POYA — asosdan uchgacha, toraygan tasma */
+  const mid = arcChainPts(bx, by, a0, [{ len:Lr*0.58, turn:0 }]);
+  taperRibbon(ctx, mid, wStem, wStem*0.42, o.cStem, o.cEdge, o.sw*0.8, 1.0);
+  /* 2) UCHIDA PALMETTA */
+  const m1 = mid[mid.length-1];
+  const roomT = distToPoly([bx + dx*Lr*0.78, by + dy*Lr*0.78], poly);
+  const pL = Math.min(roomT*1.9, Lr*0.40);
+  if(pL > pad*2) palmetteFan(ctx, m1[0], m1[1], a0, pL, 3, o.cLeaf, o.cEdge, o.sw*0.7);
+  /* 3) IKKI GAJAK — poyaning pastidan chetga, ko'zgu-simmetrik */
+  const sideRoom = Math.min(ci.rin*1.55, Lr*0.40);
+  if(sideRoom > pad*2.2){
+    for(const side of [-1, 1]){
+      curlArm(ctx, bx + dx*Lr*0.10, by + dy*Lr*0.10, a0 + side*0.95,
+              sideRoom, wStem*0.80, -side*2.0, o.cLeaf, o.cEdge, o.sw*0.65);
+    }
+  }
+  /* 4) ASOSDA KICHIK TOMCHI — motivni "ildiz"ga bog'laydi */
+  if(ci.rin > pad*3)
+    tearDrop(ctx, bx, by, a0 + Math.PI, Math.min(ci.rin*0.75, Lr*0.14),
+             Math.min(ci.rin*0.75, Lr*0.14)*0.42, o.cStem, o.cEdge, o.sw*0.6);
+  ctx.restore();
+}
+/* Markaziy katak — SODDA n qirrali gul: to'ldirilgan tomchi gulbarglar
+   va ular orasida kichik gajaklar. Spiral chalkashligi yo'q. */
+function rosetteInCell(ctx, poly, n, o){
+  const ci = cellInfo(poly);
+  const r = ci.rin, pad = o.sw*1.1;
+  if(!(r > pad*3)) return;
+  n = Math.max(5, Math.min(12, n || 8));
+  ctx.save();
+  ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
+  ctx.translate(ci.C[0], ci.C[1]);
+  const ph = o.phase || 0;
+  /* SODDALIK: gulbarglar orasiga qo'shimcha gajak QO'YILMAYDI. Sinovda
+     ular gulni loyqalantirib, katak zaminini butunlay yopib qo'ydi.
+     Ma'lumotnoma asarlarda gul — sanoqli, yirik va ochiq. */
+  const inner = [];
+  for(let i = 0; i < n; i++)
+    tearDrop(ctx, 0, 0, TAU*(i+0.5)/n + ph, r*0.54, r*0.15,
+             lerpColor(o.cLeaf, o.cEdge, 0.28), o.cEdge, o.sw*0.5);
+  for(let i = 0; i < n; i++)
+    tearDrop(ctx, 0, 0, TAU*i/n + ph, r*0.88, r*0.235, o.cLeaf, o.cEdge, o.sw*0.5);
+  /* markaz */
+  ctx.beginPath(); circle(ctx, 0, 0, r*0.17);
+  fillA(ctx, o.cStem, 0.95); st(ctx, o.cEdge, o.sw*0.55);
+  ctx.beginPath(); circle(ctx, 0, 0, r*0.075);
+  fillHard(ctx, o.cLeaf, 0.95);
+  ctx.restore();
+}
+/* Kichik katak — bitta tomchi. Undan ortig'i bu o'lchamda shovqin. */
+function budInCell(ctx, poly, o){
+  const ci = cellInfo(poly);
+  if(!(ci.rin > o.sw*2.4)) return;
+  const ang = Math.atan2(ci.C[1], ci.C[0]);
+  ctx.save();
+  ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
+  tearDrop(ctx, ci.C[0] - Math.cos(ang)*ci.rin*0.55, ci.C[1] - Math.sin(ang)*ci.rin*0.55,
+           ang, ci.rin*1.45, ci.rin*0.46, o.cLeaf, o.cEdge, o.sw*0.65);
+  ctx.restore();
+}
+
+/* --- 3) SKELETLAR — katak ro'yxatini qaytaradi ------------------------------ */
+/* GIRIH skeleti: markaziy yulduz + kite gulbarglar + oraliqlar.
+   Kataklar AYNAN drawGirih dagi geometriyadan olinadi (rosetteGeo),
+   shuning uchun to'ldirish lenta bilan piksel darajasida mos tushadi. */
+function skelGirih(R, p){
+  const n = Math.max(6, p.sym);
+  const g = rosetteGeo(n, R, p.ir);
+  g.w *= (0.72 + p.dens*0.55);
+  g.r1 = g.r2*(0.66 - p.spir*0.28);
+  const cells = [];
+  const star = [];
+  for(let i = 0; i < 2*n; i++)
+    star.push(pol(-Math.PI/2 + Math.PI*i/n, i%2 ? g.r1 : g.r2));
+  cells.push({ poly:star, cls:'core', n:n });
+  for(let i = 0; i < n; i++){
+    const a = TAU*i/n - Math.PI/2;
+    cells.push({ poly:[pol(a,g.r2), pol(a-g.w,g.rm), pol(a,g.R0), pol(a+g.w,g.rm)],
+                 cls:'petal', idx:i });
+  }
+  for(let i = 0; i < n; i++){
+    const a0 = TAU*i/n - Math.PI/2, a1 = TAU*(i+1)/n - Math.PI/2, am = (a0+a1)/2;
+    cells.push({ poly:[pol(a0,g.r2), pol(a0+g.w,g.rm), pol(am,g.R0*0.97),
+                       pol(a1-g.w,g.rm), pol(a1,g.r2), pol(am,g.r1)],
+                 cls:'gap', idx:i });
+  }
+  return { n, g, cells, kind:'girih' };
+}
+/* XATAM skeleti: ichki sakkizburchak + 8 yulduz nuri + to'qilgan kvadratlar. */
+function skelXatam(R, p){
+  const r = R*0.9, rot = -Math.PI/4;
+  const rIn = r*0.765, rOct = r*0.545;
+  const cells = [];
+  const oct = [];
+  for(let i = 0; i < 8; i++) oct.push(pol(rot + Math.PI/8 + TAU*i/8, rOct));
+  cells.push({ poly:oct, cls:'core', n:8 });
+  for(let i = 0; i < 8; i++){
+    const th = rot + TAU*i/8;
+    cells.push({ poly:[pol(th, r), pol(th + Math.PI/8, rIn),
+                       pol(th + Math.PI/8, rOct*1.02), pol(th - Math.PI/8, rOct*1.02),
+                       pol(th - Math.PI/8, rIn)],
+                 cls:'petal', idx:i });
+  }
+  return { n:8, r, rot, rIn, rOct, cells, kind:'xatam' };
+}
+/* SHAMSA skeleti: markaziy disk + ikki halqa gulbarg. */
+function skelShamsa(R, p){
+  const n = Math.max(6, p.sym);
+  const cells = [];
+  const core = [];
+  for(let i = 0; i < 2*n; i++)
+    core.push(pol(-Math.PI/2 + Math.PI*i/n, i%2 ? R*0.17 : R*0.36));
+  cells.push({ poly:core, cls:'core', n:n });
+  for(let i = 0; i < n*2; i++){
+    const a = TAU*(i+0.5)/(n*2) - Math.PI/2, hw = (Math.PI/(n*2))*0.8;
+    cells.push({ poly:[pol(a-hw, R*0.8), pol(a, R*0.955), pol(a+hw, R*0.8)],
+                 cls:'ray', idx:i });
+  }
+  return { n, cells, kind:'shamsa' };
+}
+/* MUQARNAS skeleti: har yarusdagi tokchalar. */
+function skelMuqarnas(R, p){
+  const levels = Math.max(2, Math.min(6, 1 + p.cmp));
+  const cells = [];
+  for(let l = 0; l < levels; l++){
+    const r = R*0.94*Math.pow(0.74, l);
+    const m = Math.max(6, p.sym + l*2);
+    const drop = r*(0.14 + p.ir*0.2);
+    const rNext = R*0.94*Math.pow(0.74, l+1);
+    for(let i = 0; i < m; i++){
+      const a0 = TAU*i/m - Math.PI/2, a1 = TAU*(i+1)/m - Math.PI/2, am = (a0+a1)/2;
+      cells.push({ poly:[pol(a0, r), pol(am, r-drop), pol(a1, r),
+                         pol(a1, Math.max(rNext, r*0.76)), pol(am, Math.max(rNext, r*0.74)),
+                         pol(a0, Math.max(rNext, r*0.76))],
+                   cls: l === levels-1 ? 'core' : 'niche', lev:l, idx:i });
+    }
+  }
+  return { levels, cells, kind:'muqarnas' };
+}
+
+/* --- 4) KOMPOZITOR ---------------------------------------------------------
+   Uch qatlam, qat'iy tartibda:
+     zamin (katak rangi) → to'ldirish (nafis novda) → lenta (qalin, to'q).
+   Chiziq qalinligi ham shu tartibda kamayadi, shuning uchun ko'z
+   avval geometriyani, keyin o'simlikni o'qiydi. */
+function composeCells(ctx, skel, R, p, sw, c0, c1, c2, c3, opt){
+  opt = opt || {};
+  const inkStem = opt.stem || shade(c0, 0.18);
+  const inkLeaf = opt.leaf || lerpColor(c1, '#ffffff', 0.18);
+  const fine = Math.max(0.35, sw*0.52);          /* to'ldirish — ingichka */
+  /* zamin */
+  for(const cell of skel.cells){
+    ctx.beginPath(); polyPath(ctx, cell.poly);
+    const base = cell.cls === 'core' ? c1
+               : cell.cls === 'gap'  ? lerpColor(c3, c2, 0.35)
+               : (cell.idx % 2 ? c3 : lerpColor(c3, c1, 0.22));
+    fillA(ctx, base, 0.82);
+    st(ctx, shade(c2, 0.25), sw*0.4);
+  }
+  /* to'ldirish */
+  for(const cell of skel.cells){
+    const o = { sw:fine, cStem:inkStem, cLeaf:inkLeaf, cEdge:opt.edge || shade(c0,0.55),
+                dens:p.dens, cmp:p.cmp, mirror:(cell.idx||0)%2===1 };
+    if(cell.cls === 'core')       rosetteInCell(ctx, cell.poly, cell.n || skel.n || 8, o);
+    else if(cell.cls === 'gap')   budInCell(ctx, cell.poly, o);
+    else                          vineInCell(ctx, cell.poly, o);
+  }
+}
+
+/* --- HAQIQIY YUZALARGA TO'LDIRISH -------------------------------------------
+   PIC modeli (Hankin usuli) lentalarning o'q chiziqlaridan TEKISLIKNING
+   HAQIQIY BO'LINISHINI beradi: M.faces — aynan ko'z ko'radigan kataklar.
+   Ilgari men kataklarni alohida analitik tarzda chiqargandim va ular
+   lentalar kesib o'tgan haqiqiy kataklarga mos tushmasdi — shu sababli
+   to'ldirish geometriyadan "ajralib" turardi.
+   Kataklar SHAKLI bo'yicha guruhlangan (face.rank): bir xil shakl doim
+   bir xil ishlov oladi — koshinkorlikdagi qoida shu. */
+function islimiyFaces(ctx, M, p, sw, cStem, cLeaf, cEdge, opt){
+  opt = opt || {};
+  const u = M.unit || 1;
+  const fine = Math.max(0.35, u*0.035);
+  const o = { sw:fine, cStem:cStem, cLeaf:cLeaf, cEdge:cEdge, dens:p.dens, cmp:p.cmp };
+  const faces = M.faces || [];
+  for(let i = 0; i < faces.length; i++){
+    const f = faces[i];
+    const ci = cellInfo(f.poly);
+    if(ci.rin < u*0.11) continue;                  /* juda mayda — bo'sh qoldiriladi */
+    o.phase = (i % 2) ? Math.PI/Math.max(4, f.n) : 0;
+    if(f.rank === 0 && ci.rin > u*0.26)
+      rosetteInCell(ctx, f.poly, opt.rosN || f.n, o);   /* eng yirik shakl — gul */
+    else if(ci.rin > u*0.19)
+      vineInCell(ctx, f.poly, o);                      /* o'rtacha — palmetta+gajak */
+    else
+      budInCell(ctx, f.poly, o);                       /* kichik — bitta tomchi */
+  }
+}
+/* Kombinatsiyalar uchun umumiy PIC skeleti. */
+function comboPIC(ctx, R, p, sw, c0, c1, c2, c3, cfg){
+  const pal = PAL[p.pal] || PAL.gold;
+  const pp = { ...p, tile: cfg.tile, dvar: (p.dvar|0) + (cfg.dvar||0) };
+  const spec = picSpecFrom(pp, R);
+  if(cfg.unitK) spec.unit = Math.max(R*0.08, spec.unit*cfg.unitK);
+  const M = picGet(spec);
+  const style = picStyleFrom(pal, pp, spec.unit);
+  if(cfg.bandK) style.bandW = Math.max(0.8, style.bandW*cfg.bandK);
+  /* Katak ranglari aniq belgilanadi: kombinatsiyada o'simliksimon
+     to'ldirish zamindan ajralib turishi shart, aks holda naqsh
+     "yuvilib" ketadi. */
+  if(cfg.regionPal) style.regionPal = cfg.regionPal(c0, c1, c2, c3, pal);
+  style.infill = (c, m) => cfg.fill(c, m, spec);
+  ctx.save();
+  if(!ctx._svg && !picIsRadial(cfg.tile)){
+    ctx.beginPath(); circle(ctx, 0, 0, R*0.995); ctx.clip();
+    ctx.beginPath(); circle(ctx, 0, 0, R*0.995); picFlatFill(ctx, pal.c[4]);
+  }
+  picRender(ctx, M, style);
+  ctx.restore();
+  if(!NORING){
+    ctx.beginPath(); circle(ctx, 0, 0, R*0.995);
+    picStroke(ctx, style.edge, Math.max(0.6, style.bandW*0.45));
+  }
+}
+
+/* --- GIRIH + ISLIMIY --------------------------------------------------------
+   Sakkizburchak+kvadrat (4.8.8) girih to'ri — skelet. Har katakka o'z
+   o'lchamiga qarab motiv: yirik yulduz maydoniga gul, o'rtachasiga
+   palmetta+gajak, kichigiga bitta tomchi. */
+function drawGirihIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
+  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
+    tile:'t488', unitK:1.25, bandK:1.0,
+    /* To'q zamin + och naqsh — ma'lumotnoma asarlardagi asosiy kontrast.
+       0-indeks eng YIRIK katak (gul shu yerda) bo'lgani uchun eng to'q. */
+    regionPal:(a,b,c,d,pal)=>[ lerpColor(b,'#000000',0.34), lerpColor(c,'#000000',0.16),
+                               lerpColor(d,'#000000',0.06), lerpColor(b,'#000000',0.22) ],
+    fill:(c, m) => islimiyFaces(c, m, p, sw,
+            lerpColor(c0,'#ffffff',0.62), lerpColor(c0,'#ffffff',0.78), shade(c0, 0.70))
+  });
+}
+
+/* --- XATAM + RUMI -----------------------------------------------------------
+   Kvadrat to'rda (4.4.4.4) boshqa delta burchagi olinadi — natijada
+   sakkiz qirrali XATAM tugunlari hosil bo'ladi. To'ldirish girihdagidan
+   SODDAROQ: faqat tomchi va palmetta, gul yo'q. Shu tufayli ikki
+   kombinatsiya bir-biriga o'xshab qolmaydi — ular bog'lanish ZICHLIGI
+   bilan farq qiladi. */
+function drawXatamRumi(ctx, R, p, sw, c0, c1, c2, c3){
+  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
+    tile:'t666', dvar:1, unitK:1.15, bandK:1.05,
+    regionPal:(a,b,c,d,pal)=>[ lerpColor(c,'#000000',0.38), lerpColor(b,'#000000',0.20),
+                               lerpColor(a,'#000000',0.30), lerpColor(c,'#000000',0.10) ],
+    fill:(c, m) => {
+      const u = m.unit || 1;
+      const o = { sw:Math.max(0.35, u*0.032), cStem:lerpColor(c0,'#ffffff',0.60),
+                  cLeaf:lerpColor(c0,'#ffffff',0.80), cEdge:shade(c0,0.70),
+                  dens:p.dens, cmp:p.cmp };
+      const fs = m.faces || [];
+      for(let i = 0; i < fs.length; i++){
+        const ci = cellInfo(fs[i].poly);
+        if(ci.rin < u*0.12) continue;
+        o.phase = (i % 2) ? Math.PI/6 : 0;
+        if(ci.rin > u*0.34)      rosetteInCell(c, fs[i].poly, 6, o);
+        else if(ci.rin > u*0.20) vineInCell(c, fs[i].poly, o);
+        else                     budInCell(c, fs[i].poly, o);
+      }
+    }
+  });
+}
+
+/* --- SHAMSA + GIRIH ---------------------------------------------------------
+   IKKI MIQYOSDAGI GEOMETRIYA. Skelet — o'n nurli shamsa medalyoni;
+   har katagiga MAYDA GIRIH TUGUNI joylashtiriladi. Bu Temuriy
+   me'morchiligidagi haqiqiy usul: katta girih ichida kichik girih,
+   ya'ni o'z-o'ziga o'xshash ikki pog'onali tartib. */
+function girihKnotInCell(ctx, poly, n, o){
+  const ci = cellInfo(poly);
+  const r = ci.rin;
+  if(!(r > o.sw*3)) return;
+  n = Math.max(5, Math.min(10, n || 6));
+  ctx.save();
+  ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
+  ctx.translate(ci.C[0], ci.C[1]);
+  ctx.rotate(o.phase || 0);
+  ctx.beginPath(); starPath(ctx, n, r*0.95, r*0.95*0.52, -Math.PI/2);
+  fillA(ctx, o.cLeaf, 0.95); st(ctx, o.cEdge, o.sw*0.8);
+  ctx.beginPath(); starPath(ctx, n, r*0.50, r*0.50*0.52, -Math.PI/2 + Math.PI/n);
+  fillA(ctx, o.cStem, 0.95); st(ctx, o.cEdge, o.sw*0.6);
+  ctx.beginPath(); circle(ctx, 0, 0, r*0.15);
+  fillHard(ctx, o.cLeaf, 0.95);
+  ctx.restore();
+}
+function drawShamsaGirih(ctx, R, p, sw, c0, c1, c2, c3){
+  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
+    tile:'shamsa10', unitK:1.0, bandK:1.0,
+    fill:(c, m) => {
+      const u = m.unit || 1;
+      const o = { sw:Math.max(0.35, u*0.035), cStem:shade(c0,0.35),
+                  cLeaf:lerpColor(c1,'#ffffff',0.26), cEdge:shade(c0,0.62) };
+      const fs = m.faces || [];
+      for(let i = 0; i < fs.length; i++){
+        const f = fs[i], ci = cellInfo(f.poly);
+        if(ci.rin < u*0.10) continue;
+        o.phase = (i % 2) ? Math.PI/8 : 0;
+        if(ci.rin > u*0.22) girihKnotInCell(c, f.poly, f.n >= 8 ? 8 : 6, o);
+        else                budInCell(c, f.poly, o);
+      }
+    }
+  });
+}
+
+/* --- MUQARNAS + ISLIMIY -----------------------------------------------------
+   Bu yerda skelet PIC to'ri EMAS — muqarnas pog'onalari. Shuning uchun
+   to'rtinchi kombinatsiya qolgan uchtasidan tubdan farq qiladi: kataklar
+   RADIAL ravishda kichrayib boradi va to'ldirish ham o'z-o'zidan
+   maydalashadi, haqiqiy muqarnasdagidek. */
+function drawMuqarnasIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
+  const levels = Math.max(2, Math.min(5, 1 + p.cmp));
+  const edge = shade(c0, 0.66);
+  /* Tokchalar ingichka yarim oy shaklida bo'lgani uchun ularni ko'pburchak
+     deb olib, ichki radiusdan o'lcham chiqarish ishlamaydi — motiv har
+     doim "juda kichik" deb tashlab ketilardi. Shuning uchun o'lcham
+     TO'G'RIDAN-TO'G'RI tokchaning burchak kengligi va yarus balandligidan
+     olinadi. */
+  for(let l = 0; l < levels; l++){
+    const r  = R*0.94*Math.pow(0.72, l);
+    const rN = R*0.94*Math.pow(0.72, l+1);
+    const m  = Math.max(6, p.sym + l*2);
+    const drop = r*(0.16 + p.ir*0.18);
+    const t = l/(levels-1||1);
+    const band = lerpColor(c0, c1, t);
+    const hNiche = r - rN;                       /* yarus balandligi */
+    const wNiche = TAU*r/m;                      /* tokcha eni */
+    /* 1) tokcha zamini — to'q, shunda och naqsh ajralib turadi */
+    for(let i = 0; i < m; i++){
+      const a0 = TAU*i/m - Math.PI/2, a1 = TAU*(i+1)/m - Math.PI/2;
+      const A = pol(a0,r), B = pol(a1,r), M = pol((a0+a1)/2, r-drop);
+      ctx.beginPath();
+      ctx.moveTo(A[0],A[1]);
+      ctx.bezierCurveTo(A[0]*(1-drop/r*0.5),A[1]*(1-drop/r*0.5), M[0]+(A[0]-B[0])*0.15,M[1]+(A[1]-B[1])*0.15, M[0],M[1]);
+      ctx.bezierCurveTo(M[0]+(B[0]-A[0])*0.15,M[1]+(B[1]-A[1])*0.15, B[0]*(1-drop/r*0.5),B[1]*(1-drop/r*0.5), B[0],B[1]);
+      arcB(ctx,0,0,r,a1,a0,true);
+      ctx.closePath();
+      fillA(ctx, i%2 ? lerpColor(c1,'#000000',0.30) : lerpColor(c1,'#000000',0.14), 0.95);
+    }
+    /* 2) HAR TOKCHAGA BITTA PALMETTA — markazda, pastga qaragan.
+       O'lchami tokchaning eniga bog'langani uchun yuqori yaruslarda
+       o'z-o'zidan maydalashadi, haqiqiy muqarnasdagidek. */
+    const L = Math.min(wNiche*0.60, hNiche*1.05, drop*1.30);
+    const fine = Math.max(0.3, L*0.07);
+    const leafC = lerpColor(c0, '#ffffff', 0.80);
+    /* SODDALIK: har tokchada FAQAT BITTA shakl. Sinovda palmetta ustiga
+       yon gajaklar qo'shilganda ular bir-birini bosib, dog' hosil qildi —
+       tokcha o'lchami buning uchun juda kichik. */
+    if(L > sw*1.5){
+      for(let i = 0; i < m; i++){
+        const am = TAU*(i+0.5)/m - Math.PI/2;
+        const base = pol(am, r - drop*0.10);
+        if(l === 0 && L > sw*3.2)
+          palmetteFan(ctx, base[0], base[1], am + Math.PI, L*1.05, 3, leafC, edge, fine*0.7);
+        else
+          tearDrop(ctx, base[0], base[1], am + Math.PI, L, L*0.40, leafC, edge, fine*0.7);
+      }
+    }
+    /* 3) ravoq lentasi — eng ustida */
+    ctx.beginPath();
+    for(let i = 0; i < m; i++){
+      const a0 = TAU*i/m - Math.PI/2, a1 = TAU*(i+1)/m - Math.PI/2;
+      const A = pol(a0,r), B = pol(a1,r), M = pol((a0+a1)/2, r-drop);
+      ctx.moveTo(A[0],A[1]);
+      ctx.bezierCurveTo(A[0]*(1-drop/r*0.5),A[1]*(1-drop/r*0.5), M[0]+(A[0]-B[0])*0.15,M[1]+(A[1]-B[1])*0.15, M[0],M[1]);
+      ctx.bezierCurveTo(M[0]+(B[0]-A[0])*0.15,M[1]+(B[1]-A[1])*0.15, B[0]*(1-drop/r*0.5),B[1]*(1-drop/r*0.5), B[0],B[1]);
+    }
+    ribbon(ctx, lerpColor(band,'#ffffff',0.45), shade(band,0.5), sw*1.6+0.9);
+  }
+  /* markaziy gul */
+  const rc = R*0.94*Math.pow(0.72, levels);
+  ctx.beginPath(); circle(ctx, 0, 0, rc);
+  fillA(ctx, lerpColor(c1,'#000000',0.28), 0.95);
+  st(ctx, shade(c0,0.6), sw*0.8);
+  rosetteInCell(ctx, (()=>{ const q=[]; for(let i=0;i<24;i++) q.push(pol(TAU*i/24, rc*0.97)); return q; })(),
+                Math.max(6, p.sym),
+                { sw:Math.max(0.3, rc*0.045), cStem:lerpColor(c0,'#ffffff',0.50),
+                  cLeaf:lerpColor(c0,'#ffffff',0.78), cEdge:shade(c0,0.66) });
+  ctx.beginPath(); circle(ctx, 0, 0, R*0.99); st(ctx, shade(c2,0.3), sw*0.6);
+}
 
 /* ============================================================
    D. DUNYO NAQSHLARI (8)
@@ -3560,6 +4164,13 @@ function picRender(ctx, M, style){
       ctx.beginPath(); picPolyPath(ctx, fc[i].poly, true);
       picFlatFill(ctx, pl[fc[i].rank % pl.length]);
     }
+    /* KOMBINATSIYA ILGAGI — yuzalar bo'yalgach, lentalar chizilgunga
+       QADAR chaqiriladi. Shu tufayli o'simliksimon to'ldirish aynan
+       lentalar hosil qilgan HAQIQIY kataklar ichiga tushadi va lenta
+       uning ustidan o'tadi — Temuriy kompozitsiyasidagi tartib. */
+    if(typeof s.infill === 'function'){
+      try{ s.infill(ctx, M); }catch(e){ console.warn('[combo] infill', e); }
+    }
   }
 
   /* 3) faqat chiziq rejimi — texnik chizma (CNC/lazer uchun) */
@@ -3886,7 +4497,12 @@ function getPatternDrawFn(t){ return getPattern(t).fn; }
 /* PIC yadrosi bilan chiziladigan naqshlar (girih oilasi) */
 const PIC_PATTERN = {girih:1, hankin8:1, hankin6:1, panelgirih:1, pic3636:1, shamsa10:1};
 function picTileOf(type){ const pt = getPattern(type); return (pt && pt.pic) ? pt.pic : 't488'; }
-const SINGLE_LAYER = {girih:1, hankin8:1, hankin6:1, panelgirih:1, pic3636:1, shamsa10:1, katak8:1,hexa:1,zellige:1,xitoy:1,penrose:1,voronoi:1,hilbert:1,dragon:1,greek:1,koch:1,sierpinski:1,batik:1,hankin8:1,hankin6:1,panelgirih:1};
+/* Bu turlar IKKINCHI QATLAM olmaydi: ular o'zi butun maydonni to'ldiradi
+   yoki tugallangan kompozitsiya. Kombinatsiyalar (gi, sg, mi, xr) ham shu
+   yerda — ularda ichki qatlam naqshni ikki marta chizib, markazda
+   kichraytirilgan nusxa dog'ini hosil qilardi. */
+const SINGLE_LAYER = {girih:1, hankin8:1, hankin6:1, panelgirih:1, pic3636:1, shamsa10:1, katak8:1,hexa:1,zellige:1,xitoy:1,penrose:1,voronoi:1,hilbert:1,dragon:1,greek:1,koch:1,sierpinski:1,batik:1,
+                      gi:1, sg:1, mi:1, xr:1};
 
 /* Umumiy kirish nuqtasi: qatlamlar simmetriyaga mos YARIM QADAM bilan buriladi —
    chiziqlar bir-biriga uyg'un, interlock bo'ladi */
@@ -9084,19 +9700,24 @@ medallion:{
 drawGirih(ctx, R*0.95, {...p, sym:n}, sw*1.6, c0,c1,c2,c3);
 ctx.restore();`,
  par:`girih parametrlarining barchasi ichki o'zakka o'tadi`},
-gi:{model:`Yuqori tartibli funksiya kompozitsiyasi: makeCombo(fA,fB) — tashqi uslub to'liq R da, ichki uslub 0.5 masshtab + yarim qadam burilish bilan chiziladi. Bu yerda: Girih (tashqi) + Islimiy (ichki).`,
- frm:[`f(ctx) = fA(ctx,R) ∘ [scale(0.5)·rot(π/n)] fB(ctx,R)`],
- algo:[`fA chaqiriladi`,`Kontekst 0.5 ga masshtablanadi, π/n ga buriladi`,`fB rang juftlari almashgan holda chaqiriladi`],
- code:`function makeCombo(fA,fB){
- return function(ctx,R,p,sw,c0,c1,c2,c3){
-   fA(ctx,R,p,sw,c0,c1,c2,c3);
-   ctx.save(); ctx.scale(0.5,0.5); ctx.rotate(Math.PI/p.sym);
-   fB(ctx,R,p,sw*1.7, c1,c0,c3,c2);
-   ctx.restore(); }; }`,
- par:`ikkala uslubning parametrlari birga ishlaydi`},
-sg:{model:`makeCombo(Shamsa, Girih): tashqi quyosh medalyoni ichida 0.5 masshtabda girih yulduz-tugun.`,frm:[`f = Shamsa ∘ scale(0.5)·Girih`],algo:[`Shamsa to'liq R da`,`Girih 0.5R da yarim qadam burilib`],code:`makeCombo(drawShamsa, drawGirih)`,par:`ikkala uslub parametrlari`},
-mi:{model:`makeCombo(Muqarnas, Islimiy): pog'onali arkada ichida spiral novdalar.`,frm:[`f = Muqarnas ∘ scale(0.5)·Islimiy`],algo:[`Muqarnas darajalari`,`Islimiy spirallari markazda`],code:`makeCombo(drawMuqarnas, drawIslimiy)`,par:`ikkala uslub parametrlari`},
-xr:{model:`makeCombo(Xatam, Rumi): xatam yulduzi ichida rumi barglari halqasi.`,frm:[`f = Xatam ∘ scale(0.5)·Rumi`],algo:[`Xatam ramkasi`,`Rumi halqasi markazda`],code:`makeCombo(drawXatam, drawRumi)`,par:`ikkala uslub parametrlari`},
+gi:{model:`QATLAM-KATAK KOMPOZITSIYASI. Girih bu yerda rasm emas, SKELET: Hankin usuli (polygons-in-contact) bilan qurilgan 4.8.8 lenta to'ri tekislikni yopiq KATAKLARGA bo'ladi. Kataklar shakli bo'yicha guruhlanadi va har guruh o'z ishlovini oladi — koshinkorlikdagi qoida: bir xil shakl doim bir xil bezak. Islimiy esa har katakning ICHIGA, uning o'lchamiga moslab o'stiriladi va lentadan oshmaydi.`,
+ frm:[`yuzalar: F = PlanarFaces(StrapworkGraph)`,`to'ldirish: M(f) = Motiv(shakl(f), rIn(f))`,`tartib: zamin → to'ldirish → lenta`],
+ algo:[`PIC grafi qurilib, yarim qirralar aylanishi bilan yuzalar ajratiladi`,`har yuza uchun og'irlik markazi va ichki radius hisoblanadi`,`rIn ga qarab motiv tanlanadi: yirik — gul, o'rtacha — palmetta+gajak, kichik — tomchi`,`motiv katak konturiga qirqiladi`,`lenta eng ustidan to'qib chiziladi`],
+ code:`const M = picGet(picSpecFrom(p, R));
+style.infill = (ctx, M) => {
+  for(const f of M.faces){
+    const ci = cellInfo(f.poly);          // markaz, ichki radius
+    if(f.rank === 0) rosetteInCell(...);  // eng yirik shakl
+    else if(ci.rin > u*0.19) vineInCell(...);
+    else budInCell(...);
+  }
+};
+picRender(ctx, M, style);`,
+ par:`Simmetriya — to'r qadami; Zichlik — katak o'lchami; Ichki radius — lenta burchagi`},
+sg:{model:`IKKI MIQYOSDAGI GEOMETRIYA. Skelet — o'n nurli shamsa medalyoni; har katagiga MAYDA GIRIH TUGUNI joylashtiriladi. Temuriy me'morchiligidagi haqiqiy usul: katta girih ichida kichik girih, o'z-o'ziga o'xshash ikki pog'onali tartib.`,frm:[`M(f) = GirihKnot(n(f), rIn(f))`],algo:[`shamsa10 radial to'ri`,`har yuzaga o'z ichki radiusiga teng yulduz tuguni`,`kichik yuzalarga bitta tomchi`],code:`girihKnotInCell(ctx, face.poly, face.n >= 8 ? 8 : 6, o)`,par:`Simmetriya — nurlar soni; Ichki radius — tugun o'tkirligi`},
+mi:{model:`RADIAL IYERARXIYA. Skelet PIC to'ri emas — muqarnas pog'onalari. Kataklar markazga tomon kichrayib boradi, shuning uchun to'ldirish ham o'z-o'zidan maydalashadi. Motiv o'lchami tokchaning burchak kengligi va yarus balandligidan olinadi.`,frm:[`L = min(2πr/m · 0.60 , (r − r') · 1.05 , drop · 1.30)`],algo:[`yaruslar r_l = 0.94R·0.72^l`,`har tokchaga bitta shakl: pastki yarusda palmetta, yuqorida tomchi`,`markazda islimiy gul`],code:`const L = Math.min(wNiche*0.60, hNiche*1.05, drop*1.30);
+tearDrop(ctx, base[0], base[1], am + Math.PI, L, L*0.40, leafC, edge, fine);`,par:`Murakkablik — yaruslar soni; Simmetriya — tokchalar soni`},
+xr:{model:`BOG'LANISH ZICHLIGI BO'YICHA FARQ. Oltiburchak (6.6.6) girih to'ri + rumi to'ldirish. gi dan farqi — boshqa to'r va boshqa motiv taqsimoti: bu yerda yirik kataklarga olti gulbargli gul, oraliqlarga tomchi tushadi. Shu tufayli to'rtta kombinatsiya to'rt xil BOG'LANISH USULINI ko'rsatadi, bir usulning to'rt nusxasini emas.`,frm:[`skelet: T(6.6.6) ∘ Hankin(δ)`,`M(f) = rIn(f) > 0.34u ? Gul₆ : (rIn > 0.20u ? Palmetta : Tomchi)`],algo:[`oltiburchak to'r, delta varianti 1`,`yuzalar ichki radiusi bo'yicha uch sinfga ajratiladi`,`to'q zamin + och naqsh kontrasti`],code:`comboPIC(ctx, R, p, sw, c0,c1,c2,c3, { tile:'t666', dvar:1, ... })`,par:`Simmetriya, Zichlik — to'r qadami`},
 celtic:{
  model:`Ikki tolali torus o'rmasi (plait): tolalar r(θ)=r_m + a·sin(kθ+φ) sinusoid halqalar, φ∈{0,π}; kesishishlar sin=0 nuqtalarida; har tola 2k segmentga bo'linib, (tola+j) juftligi bo'yicha ost/ust tartibida chiziladi — matematik aniq navbatlashgan to'qish.`,
  frm:[`r_A(θ)=r_m+a·sin(kθ), r_B(θ)=r_m+a·sin(kθ+π)`,
