@@ -393,3 +393,134 @@ kamaytirildi (~1500 → ~400 uchburchak, peshtoqda 78 ta qovurg'a bor):
 - Nozik chiziqli naqshlarda (Spirograf, Xitoy panjara) qoplama past bo'ladi —
   kerak bo'lsa **Chiziq qalinligi** slayderini oshiring.
 - Lazer uchun **Kontur** to'ldirish rejimi eng mos (to'ldirilgan emas).
+
+---
+
+## Kombinatsiyalar — qatlam-katak kompozitsiyasi
+
+Dasturning yangilik jihati: geometrik va o'simliksimon tizimlarni
+**qo'shish** emas, **bog'lash**.
+
+### Nega oddiy ustma-ust qo'yish yaramaydi
+
+Dastlab bu yerda `makeCombo(A, B)` turardi: A naqsh to'liq radiusda
+chizilar, B esa 0.5 masshtabda uning ustiga qo'yilardi. Bu kompozitsiya
+emas:
+
+- ikki tizim orasida geometrik bog'liqlik yo'q — girih yulduzining
+  markazi islimiy novdasining boshlanishiga tushmaydi;
+- ichki naqsh tashqisini berkitadi, qaysi biri zamin, qaysi biri bezak
+  ekani o'qilmaydi;
+- 0.5 koeffitsienti ixtiyoriy, miqyoslar orasida nisbat yo'q.
+
+### Usul
+
+Temuriy kompozitsiyasida ikki tizim raqobat qilmaydi — ierarxiya
+tashkil etadi:
+
+| Bosqich | Mazmuni |
+|---|---|
+| 1. Skelet | Girih lentalari tekislikni yopiq **kataklarga** bo'ladi |
+| 2. Tasnif | Kataklar **shakli** bo'yicha guruhlanadi; bir xil shakl doim bir xil ishlov oladi |
+| 3. To'ldirish | Islimiy har katakning **ichiga**, uning o'lchamiga moslab o'stiriladi |
+| 4. Ierarxiya | Lenta eng ustida, eng qalin va eng to'q — ko'z avval geometriyani o'qiydi |
+
+### Kataklar qayerdan olinadi
+
+Bu eng muhim nuqta. Dastlabki urinishda kataklar **analitik** chiqarildi
+(kite gulbarglar, markaziy yulduz, oraliqlar). Ular lentalar **kesib
+o'tgan** haqiqiy kataklarga mos tushmadi va to'ldirish geometriyadan
+ajralib turdi.
+
+Yechim: kataklar `picFaces()` dan olinadi — bu PIC (Hankin) yadrosi
+qurgan grafning **haqiqiy planar bo'linishi**. Yarim qirralar (half-edge)
+aylanishi bilan topilgan yuzalar aynan ko'z ko'radigan kataklardir.
+`picRender()` ga `style.infill` ilgagi qo'shildi: u yuzalar bo'yalgach,
+lentalar chizilgunga **qadar** chaqiriladi.
+
+### Shakl lug'ati
+
+Ma'lumotnoma asarlarda (Hirot kitobat naqshlari, Buxoro yog'och
+o'ymakorligi) novda ingichka chiziq emas — **to'ldirilgan, toraygan
+tasma**:
+
+| Element | Vazifasi |
+|---|---|
+| `arcChainPts` | urinma yoylar zanjiri — novdaning o'zani |
+| `taperRibbon` | asosda keng, uchida nolga toraygan to'ldirilgan tasma |
+| `tearDrop` | tomchi — eng ko'p uchraydigan element |
+| `palmetteFan` | uch bo'lakli yelpig'ich gul, novda shu bilan tugaydi |
+| `curlArm` | uchi o'ralgan gajak |
+
+Logarifmik spiral **ishlatilmaydi**: u markazga tomon cheksiz zichlashib,
+chalkash dog' beradi. Urinma yoylar zanjirida egrilik ishorasi
+navbatlashadi, shuning uchun chiziq uzluksiz "oqadi".
+
+### Soddalik qoidasi
+
+Har katakka **bitta** yirik, o'qqa nisbatan simmetrik motiv. Sinovda
+gulbarglar orasiga qo'shimcha gajak qo'yilganda ular katak zaminini
+butunlay yopib, naqshni loyqalantirdi — olib tashlandi. Kontrast
+ma'lumotnoma asarlardagidek: **to'q zamin + och naqsh**.
+
+### To'rt xil bog'lanish usuli
+
+Bir usulning to'rt nusxasi emas — to'rt xil **bog'lanish printsipi**:
+
+| Kod | Skelet | Printsip |
+|---|---|---|
+| `gi` Girih+Islimiy | 4.8.8 lenta to'ri | geometrik ramka + o'simliksimon to'ldirish |
+| `xr` Xatam+Rumi | 6.6.6 to'r | boshqa to'r, boshqa motiv taqsimoti |
+| `sg` Shamsa+Girih | shamsa medalyoni | **ikki miqyosdagi geometriya** — girih ichida girih |
+| `mi` Muqarnas+Islimiy | muqarnas yaruslari | **radial ierarxiya** — kataklar markazga kichrayadi |
+
+### Rapport (chok-suzlik)
+
+Kombinatsiyalar ham PIC naqshlari kabi **matematik aniq davriy
+plitkadan** quriladi (`picSeamlessTile`), shuning uchun to'quv va lazer
+eksportida lenta rapport chetida uzilmaydi.
+
+Bu yo'lga o'tkazishda ikki xato topilgan va tuzatilgan:
+
+1. **Rapport bo'm-bo'sh chiqardi.** `comboPIC` medalyon chegarasi uchun
+   `circle()` ni `clip()` bilan ishlatardi. `circle()` esa
+   tessellatsiyada (NORING qo'yilganda) ataylab hech narsa chizmaydi —
+   natijada `clip()` **bo'sh yo'lga** qirqib, butun chizmani yo'q
+   qilardi. Lazer eksporti ishlayotgandek ko'rinardi (u SVG yo'lidan
+   ketadi), lekin Jakkard eksporti va 3D teksturasi bo'sh edi. Endi
+   `ctx.arc()` to'g'ridan-to'g'ri chaqiriladi.
+2. **Rapportda chok bor edi.** Kombinatsiyalar panjara nusxalari
+   sifatida chizilardi — har nusxa alohida medalyon bo'lib, qo'shnisi
+   bilan tutashmasdi. Endi ular `picSeamlessTile` yo'lidan boradi.
+
+O'lchov: 16 holat (4 kombinatsiya × 4 guruh) — chok testidan **16/16**
+o'tdi, chizish **determinik**.
+
+### Rang zanjiri xatosi (butun dasturga taalluqli)
+
+Kombinatsiyalar ustida ishlashda tasodifan topilgan va tuzatilgan jiddiy
+nuqson.
+
+`lerpColor()` natijani `"rgb(r,g,b)"` ko'rinishida qaytaradi, `hex2rgb()`
+esa faqat HEX o'qirdi. Shu sababli ranglar **zanjirlab** ishlatilganda —
+`shade(lerpColor(...))` yoki `lerpColor(lerpColor(...), ...)` — `"rgb("`
+matni o'n oltilik son deb o'qilib, `NaN → 0` ga aylanardi va natija
+**kulrang** chiqardi.
+
+Bu alohida holat emas edi: `drawPattern()` har naqshga `c0` va `c1` ni
+aynan `lerpColor()` orqali uzatadi, ya'ni **har bir naqshda** keyingi
+har qanday rang hisobi buzilgan edi. O'lchov: feruza palitrasida
+`lerpColor(c0,'#ffffff',0.62)` och feruza o'rniga `rgb(158,162,166)` —
+toza kulrang — qaytarardi.
+
+`hex2rgb()` endi `rgb()`/`rgba()` ko'rinishini ham, massivni ham, noto'g'ri
+qiymatni ham to'g'ri qabul qiladi. Tuzatishdan keyin barcha 41 naqsh
+palitra ranglarida chiqadi.
+
+### To'ldirish shaffofligi
+
+`fillA()` "dual" rejimda 0.62 shaffoflik qo'llaydi — bu akvarel tusini
+beradi. Koshinkorlikda esa sirlash **to'liq qoplama** bo'ladi. Shuning
+uchun kombinatsiya bezaklari va muqarnas tokchalari `fillSolid()` bilan
+to'ldiriladi: shaffoflik yo'q, lekin chiziq rejimi (lazer/CNC) baribir
+hurmat qilinadi — `fillHard()` dan farqi aynan shu.

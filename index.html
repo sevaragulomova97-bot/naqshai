@@ -1030,9 +1030,22 @@ const PAL = {
 };
 
 /* ---------- Rang helperlari ---------- */
+/* Rangni [r,g,b] ga aylantirish.
+   MUHIM: lerpColor() natijani "rgb(r,g,b)" ko'rinishida qaytaradi.
+   Ilgari bu funksiya faqat HEX o'qirdi, shuning uchun ranglar
+   ZANJIRLAB ishlatilganda — lerpColor(lerpColor(...), ...) yoki
+   shade(lerpColor(...)) — "rgb(" matni o'n oltilik son deb o'qilib,
+   NaN→0 ga aylanardi va natija KULRANG chiqardi.
+   drawPattern c0 va c1 ni aynan lerpColor orqali beradi, ya'ni HAR
+   naqshda keyingi har qanday rang hisobi buzilgan edi. */
 function hex2rgb(h){
-  h = (h||'#000').replace('#','');
+  if(Array.isArray(h)) return h;
+  h = String(h == null ? '#000' : h).trim();
+  const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(h);
+  if(m) return [Math.round(+m[1]) || 0, Math.round(+m[2]) || 0, Math.round(+m[3]) || 0];
+  h = h.replace('#','');
   if(h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) return [0,0,0];
   return [parseInt(h.slice(0,2),16)||0, parseInt(h.slice(2,4),16)||0, parseInt(h.slice(4,6),16)||0];
 }
 function lerpColor(c1,c2,t){
@@ -1212,6 +1225,20 @@ function fillA(ctx,col,alpha){
   if(P.fill==='line') return;
   ctx.save();
   ctx.globalAlpha = (P.fill==='fill' ? 0.94 : 0.62) * (alpha===undefined?1:alpha);
+  ctx.fillStyle = col;
+  ctx.fill();
+  ctx.restore();
+}
+/* TO'LIQ QOPLAMALI to'ldirish — koshinkorlikdagidek.
+   fillA() 0.62 shaffoflik qo'llaydi ("dual" rejimda), shuning uchun
+   ranglar fon bilan aralashib yuviladi: kombinatsiyalarda muqarnas
+   tokchalari kulrang chiqib qolgandi. Bu yerda shaffoflik yo'q, lekin
+   CHIZIQ REJIMI (lazer/CNC uchun) baribir hurmat qilinadi — fillHard
+   dan farqi aynan shu. */
+function fillSolid(ctx,col){
+  if(P.fill==='line') return;
+  ctx.save();
+  ctx.globalAlpha = 1;
   ctx.fillStyle = col;
   ctx.fill();
   ctx.restore();
@@ -2489,7 +2516,7 @@ function taperRibbonPath(ctx, pts, w0, w1, pow){
 }
 function taperRibbon(ctx, pts, w0, w1, fillC, edgeC, sw, pow){
   ctx.beginPath(); taperRibbonPath(ctx, pts, w0, w1, pow);
-  fillA(ctx, fillC, 0.95);
+  fillSolid(ctx, fillC);
   st(ctx, edgeC, sw);
 }
 /* TOMCHI (bargak) — bir uchi o'tkir, ikkinchisi yumaloq yaxlit shakl.
@@ -2503,7 +2530,7 @@ function tearPath(ctx, x, y, ang, L, W){
 }
 function tearDrop(ctx, x, y, ang, L, W, fillC, edgeC, sw){
   ctx.beginPath(); tearPath(ctx, x, y, ang, L, W);
-  fillA(ctx, fillC, 0.95); st(ctx, edgeC, sw);
+  fillSolid(ctx, fillC); st(ctx, edgeC, sw);
 }
 /* PALMETTA — uch yoki besh bo'lakli yaxlit gul. Bo'laklar TO'LDIRILGAN
    tomchilar, o'rtadagisi eng uzun. Novda shu bilan tugaydi. */
@@ -2515,7 +2542,7 @@ function palmetteFan(ctx, x, y, ang, L, lobes, fillC, edgeC, sw){
     const da = k*(0.62/Math.max(1, half));
     const f = 1 - Math.abs(k)/(half + 1.1)*0.45;
     tearDrop(ctx, x, y, ang + da, L*f, L*f*0.30,
-             k === 0 ? fillC : lerpColor(fillC, edgeC, 0.20), edgeC, sw);
+             k === 0 ? fillC : lerpColor(fillC, edgeC, 0.18), edgeC, sw);
   }
 }
 /* GAJAK — uchi o'ralgan toraygan tasma. Islimiyning ikkinchi asosiy harfi. */
@@ -2689,7 +2716,7 @@ function rosetteInCell(ctx, poly, n, o){
     tearDrop(ctx, 0, 0, TAU*i/n + ph, r*0.88, r*0.235, o.cLeaf, o.cEdge, o.sw*0.5);
   /* markaz */
   ctx.beginPath(); circle(ctx, 0, 0, r*0.17);
-  fillA(ctx, o.cStem, 0.95); st(ctx, o.cEdge, o.sw*0.55);
+  fillSolid(ctx, o.cStem); st(ctx, o.cEdge, o.sw*0.55);
   ctx.beginPath(); circle(ctx, 0, 0, r*0.075);
   fillHard(ctx, o.cLeaf, 0.95);
   ctx.restore();
@@ -2841,6 +2868,60 @@ function islimiyFaces(ctx, M, p, sw, cStem, cLeaf, cEdge, opt){
       budInCell(ctx, f.poly, o);                       /* kichik — bitta tomchi */
   }
 }
+/* KOMBINATSIYA REGISTRI — bir joyda, chunki bu konfiguratsiya uch
+   joydan kerak bo'ladi: medalyon chizish, rapport (tessellatsiya) va
+   rapport o'lchamini oldindan bilish. Ilgari u faqat chizish
+   funksiyasi ichida turgani uchun rapport boshqa yo'ldan ketib,
+   kombinatsiyalar chok bilan takrorlanardi. */
+const COMBO_SPEC = {
+  gi: { tile:'t488', unitK:1.25, bandK:1.0,
+        regionPal:(a,b,c,d)=>[ lerpColor(b,'#000000',0.34), lerpColor(c,'#000000',0.16),
+                               lerpColor(d,'#000000',0.06), lerpColor(b,'#000000',0.22) ],
+        ink:(a,b,c,d)=>[ lerpColor(a,'#ffffff',0.62), lerpColor(a,'#ffffff',0.78), shade(a,0.70) ],
+        motif:'islimiy' },
+  xr: { tile:'t666', dvar:1, unitK:1.15, bandK:1.05,
+        regionPal:(a,b,c,d)=>[ lerpColor(c,'#000000',0.38), lerpColor(b,'#000000',0.20),
+                               lerpColor(a,'#000000',0.30), lerpColor(c,'#000000',0.10) ],
+        ink:(a,b,c,d)=>[ lerpColor(a,'#ffffff',0.60), lerpColor(a,'#ffffff',0.80), shade(a,0.70) ],
+        motif:'rumi' },
+  sg: { tile:'shamsa10', unitK:1.0, bandK:1.0,
+        ink:(a,b,c,d)=>[ shade(a,0.35), lerpColor(b,'#ffffff',0.26), shade(a,0.62) ],
+        motif:'knot' }
+};
+/* Yuzalarni to'ldirish — motiv turiga qarab. */
+function comboFill(ctx, M, p, cfg, c0, c1, c2, c3){
+  const u = M.unit || 1;
+  const ink = cfg.ink(c0, c1, c2, c3);
+  const o = { sw:Math.max(0.35, u*0.034), cStem:ink[0], cLeaf:ink[1], cEdge:ink[2],
+              dens:p.dens, cmp:p.cmp };
+  const fs = M.faces || [];
+  for(let i = 0; i < fs.length; i++){
+    const f = fs[i], ci = cellInfo(f.poly);
+    if(ci.rin < u*0.11) continue;
+    o.phase = (i % 2) ? Math.PI/Math.max(4, f.n) : 0;
+    if(cfg.motif === 'knot'){
+      if(ci.rin > u*0.22) girihKnotInCell(ctx, f.poly, f.n >= 8 ? 8 : 6, o);
+      else                budInCell(ctx, f.poly, o);
+    } else if(cfg.motif === 'rumi'){
+      if(ci.rin > u*0.34)      rosetteInCell(ctx, f.poly, 6, o);
+      else if(ci.rin > u*0.20) vineInCell(ctx, f.poly, o);
+      else                     budInCell(ctx, f.poly, o);
+    } else {
+      if(f.rank === 0 && ci.rin > u*0.26) rosetteInCell(ctx, f.poly, f.n, o);
+      else if(ci.rin > u*0.19)            vineInCell(ctx, f.poly, o);
+      else                                budInCell(ctx, f.poly, o);
+    }
+  }
+}
+/* Rapport uchun style o'zgartirgichi */
+function comboStyleMod(cfg, p, c0, c1, c2, c3){
+  return function(stl, M){
+    if(cfg.regionPal) stl.regionPal = cfg.regionPal(c0, c1, c2, c3);
+    if(cfg.bandK) stl.bandW = Math.max(0.8, stl.bandW*cfg.bandK);
+    stl.infill = (c, m) => comboFill(c, m, p, cfg, c0, c1, c2, c3);
+  };
+}
+
 /* Kombinatsiyalar uchun umumiy PIC skeleti. */
 function comboPIC(ctx, R, p, sw, c0, c1, c2, c3, cfg){
   const pal = PAL[p.pal] || PAL.gold;
@@ -2855,69 +2936,48 @@ function comboPIC(ctx, R, p, sw, c0, c1, c2, c3, cfg){
      "yuvilib" ketadi. */
   if(cfg.regionPal) style.regionPal = cfg.regionPal(c0, c1, c2, c3, pal);
   style.infill = (c, m) => cfg.fill(c, m, spec);
+  /* TESSELLATSIYA REJIMI. NORING qo'yilganda naqsh PANJARA TUGUNIDA
+     chizilmoqda va qo'shni nusxalar bilan uzluksiz maydon hosil qilishi
+     kerak — medalyon doirasi bu yerda ortiqcha.
+
+     DIQQAT: bu yerda circle() ISHLATIB BO'LMAYDI. U tessellatsiyada
+     ataylab hech narsa chizmaydi (medalyon ramkasini olib tashlash
+     uchun), natijada beginPath()+clip() BO'SH yo'lga qirqib, butun
+     chizmani yo'q qilardi — rapport bo'm-bo'sh chiqardi va shu sababli
+     Jakkard eksporti hamda 3D teksturasi bo'sh edi. Shuning uchun
+     to'g'ridan-to'g'ri ctx.arc() chaqiriladi. */
+  const tess = !!NORING;
   ctx.save();
-  if(!ctx._svg && !picIsRadial(cfg.tile)){
-    ctx.beginPath(); circle(ctx, 0, 0, R*0.995); ctx.clip();
-    ctx.beginPath(); circle(ctx, 0, 0, R*0.995); picFlatFill(ctx, pal.c[4]);
+  if(!ctx._svg && !picIsRadial(cfg.tile) && !tess){
+    ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU); ctx.clip();
+    ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU); picFlatFill(ctx, pal.c[4]);
   }
   picRender(ctx, M, style);
   ctx.restore();
-  if(!NORING){
-    ctx.beginPath(); circle(ctx, 0, 0, R*0.995);
+  if(!tess){
+    ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU);
     picStroke(ctx, style.edge, Math.max(0.6, style.bandW*0.45));
   }
 }
 
-/* --- GIRIH + ISLIMIY --------------------------------------------------------
-   Sakkizburchak+kvadrat (4.8.8) girih to'ri — skelet. Har katakka o'z
-   o'lchamiga qarab motiv: yirik yulduz maydoniga gul, o'rtachasiga
-   palmetta+gajak, kichigiga bitta tomchi. */
+/* --- UCH PIC KOMBINATSIYASI -------------------------------------------------
+   Konfiguratsiya COMBO_SPEC da; bu yerda faqat chaqiruv. */
+function drawComboById(id, ctx, R, p, sw, c0, c1, c2, c3){
+  const cfg = COMBO_SPEC[id];
+  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, Object.assign({}, cfg, {
+    fill:(cc, mm) => comboFill(cc, mm, p, cfg, c0, c1, c2, c3),
+    regionPal: cfg.regionPal ? ((a1,b1,c1b,d1)=>cfg.regionPal(a1,b1,c1b,d1)) : null
+  }));
+}
+/* GIRIH + ISLIMIY — 4.8.8 lenta to'ri skelet, islimiy to'ldirish. */
 function drawGirihIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
-  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
-    tile:'t488', unitK:1.25, bandK:1.0,
-    /* To'q zamin + och naqsh — ma'lumotnoma asarlardagi asosiy kontrast.
-       0-indeks eng YIRIK katak (gul shu yerda) bo'lgani uchun eng to'q. */
-    regionPal:(a,b,c,d,pal)=>[ lerpColor(b,'#000000',0.34), lerpColor(c,'#000000',0.16),
-                               lerpColor(d,'#000000',0.06), lerpColor(b,'#000000',0.22) ],
-    fill:(c, m) => islimiyFaces(c, m, p, sw,
-            lerpColor(c0,'#ffffff',0.62), lerpColor(c0,'#ffffff',0.78), shade(c0, 0.70))
-  });
+  drawComboById('gi', ctx, R, p, sw, c0, c1, c2, c3);
 }
-
-/* --- XATAM + RUMI -----------------------------------------------------------
-   Kvadrat to'rda (4.4.4.4) boshqa delta burchagi olinadi — natijada
-   sakkiz qirrali XATAM tugunlari hosil bo'ladi. To'ldirish girihdagidan
-   SODDAROQ: faqat tomchi va palmetta, gul yo'q. Shu tufayli ikki
-   kombinatsiya bir-biriga o'xshab qolmaydi — ular bog'lanish ZICHLIGI
-   bilan farq qiladi. */
+/* XATAM + RUMI — 6.6.6 to'r, boshqa motiv taqsimoti. */
 function drawXatamRumi(ctx, R, p, sw, c0, c1, c2, c3){
-  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
-    tile:'t666', dvar:1, unitK:1.15, bandK:1.05,
-    regionPal:(a,b,c,d,pal)=>[ lerpColor(c,'#000000',0.38), lerpColor(b,'#000000',0.20),
-                               lerpColor(a,'#000000',0.30), lerpColor(c,'#000000',0.10) ],
-    fill:(c, m) => {
-      const u = m.unit || 1;
-      const o = { sw:Math.max(0.35, u*0.032), cStem:lerpColor(c0,'#ffffff',0.60),
-                  cLeaf:lerpColor(c0,'#ffffff',0.80), cEdge:shade(c0,0.70),
-                  dens:p.dens, cmp:p.cmp };
-      const fs = m.faces || [];
-      for(let i = 0; i < fs.length; i++){
-        const ci = cellInfo(fs[i].poly);
-        if(ci.rin < u*0.12) continue;
-        o.phase = (i % 2) ? Math.PI/6 : 0;
-        if(ci.rin > u*0.34)      rosetteInCell(c, fs[i].poly, 6, o);
-        else if(ci.rin > u*0.20) vineInCell(c, fs[i].poly, o);
-        else                     budInCell(c, fs[i].poly, o);
-      }
-    }
-  });
+  drawComboById('xr', ctx, R, p, sw, c0, c1, c2, c3);
 }
-
-/* --- SHAMSA + GIRIH ---------------------------------------------------------
-   IKKI MIQYOSDAGI GEOMETRIYA. Skelet — o'n nurli shamsa medalyoni;
-   har katagiga MAYDA GIRIH TUGUNI joylashtiriladi. Bu Temuriy
-   me'morchiligidagi haqiqiy usul: katta girih ichida kichik girih,
-   ya'ni o'z-o'ziga o'xshash ikki pog'onali tartib. */
+/* SHAMSA + GIRIH — ikki miqyosdagi geometriya: girih ichida girih. */
 function girihKnotInCell(ctx, poly, n, o){
   const ci = cellInfo(poly);
   const r = ci.rin;
@@ -2928,37 +2988,17 @@ function girihKnotInCell(ctx, poly, n, o){
   ctx.translate(ci.C[0], ci.C[1]);
   ctx.rotate(o.phase || 0);
   ctx.beginPath(); starPath(ctx, n, r*0.95, r*0.95*0.52, -Math.PI/2);
-  fillA(ctx, o.cLeaf, 0.95); st(ctx, o.cEdge, o.sw*0.8);
+  fillSolid(ctx, o.cLeaf); st(ctx, o.cEdge, o.sw*0.8);
   ctx.beginPath(); starPath(ctx, n, r*0.50, r*0.50*0.52, -Math.PI/2 + Math.PI/n);
-  fillA(ctx, o.cStem, 0.95); st(ctx, o.cEdge, o.sw*0.6);
+  fillSolid(ctx, o.cStem); st(ctx, o.cEdge, o.sw*0.6);
   ctx.beginPath(); circle(ctx, 0, 0, r*0.15);
   fillHard(ctx, o.cLeaf, 0.95);
   ctx.restore();
 }
 function drawShamsaGirih(ctx, R, p, sw, c0, c1, c2, c3){
-  comboPIC(ctx, R, p, sw, c0, c1, c2, c3, {
-    tile:'shamsa10', unitK:1.0, bandK:1.0,
-    fill:(c, m) => {
-      const u = m.unit || 1;
-      const o = { sw:Math.max(0.35, u*0.035), cStem:shade(c0,0.35),
-                  cLeaf:lerpColor(c1,'#ffffff',0.26), cEdge:shade(c0,0.62) };
-      const fs = m.faces || [];
-      for(let i = 0; i < fs.length; i++){
-        const f = fs[i], ci = cellInfo(f.poly);
-        if(ci.rin < u*0.10) continue;
-        o.phase = (i % 2) ? Math.PI/8 : 0;
-        if(ci.rin > u*0.22) girihKnotInCell(c, f.poly, f.n >= 8 ? 8 : 6, o);
-        else                budInCell(c, f.poly, o);
-      }
-    }
-  });
+  drawComboById('sg', ctx, R, p, sw, c0, c1, c2, c3);
 }
 
-/* --- MUQARNAS + ISLIMIY -----------------------------------------------------
-   Bu yerda skelet PIC to'ri EMAS — muqarnas pog'onalari. Shuning uchun
-   to'rtinchi kombinatsiya qolgan uchtasidan tubdan farq qiladi: kataklar
-   RADIAL ravishda kichrayib boradi va to'ldirish ham o'z-o'zidan
-   maydalashadi, haqiqiy muqarnasdagidek. */
 function drawMuqarnasIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
   const levels = Math.max(2, Math.min(5, 1 + p.cmp));
   const edge = shade(c0, 0.66);
@@ -2986,14 +3026,25 @@ function drawMuqarnasIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
       ctx.bezierCurveTo(M[0]+(B[0]-A[0])*0.15,M[1]+(B[1]-A[1])*0.15, B[0]*(1-drop/r*0.5),B[1]*(1-drop/r*0.5), B[0],B[1]);
       arcB(ctx,0,0,r,a1,a0,true);
       ctx.closePath();
-      fillA(ctx, i%2 ? lerpColor(c1,'#000000',0.30) : lerpColor(c1,'#000000',0.14), 0.95);
+      /* Zamin PALITRA ranglarida, qoraytirilmaydi: ilgari ikkalasi ham
+         c1 dan qora tomon siljitilardi va natija kulrang chiqardi.
+         Haqiqiy muqarnasda tokchalar navbatma-navbat ko'k va feruza
+         sirlangan bo'ladi. */
+      /* DIQQAT: drawPattern c3 sifatida pal.c[4] ni — OCH FON rangini
+         beradi, pal.c[3] ni emas. Zamin uchun uni ishlatish naqshni
+         kulrang qilib qo'yardi. Shuning uchun bu yerda c0 va c1
+         (asosiy va qarama-qarshi ranglar) navbatlashadi — haqiqiy
+         muqarnasdagi ko'k/feruza sirlashdek. */
+      fillSolid(ctx, i%2 ? lerpColor(c0,'#000000',0.10) : lerpColor(c1,'#000000',0.20));
     }
     /* 2) HAR TOKCHAGA BITTA PALMETTA — markazda, pastga qaragan.
        O'lchami tokchaning eniga bog'langani uchun yuqori yaruslarda
        o'z-o'zidan maydalashadi, haqiqiy muqarnasdagidek. */
-    const L = Math.min(wNiche*0.60, hNiche*1.05, drop*1.30);
+    /* Motiv tokchaning ichiga sig'ishi shart: ilgari hNiche*1.05 olinardi
+       va shakl tokchadan oshib, qo'shnisini bosardi. */
+    const L = Math.min(wNiche*0.52, drop*1.05, hNiche*0.78);
     const fine = Math.max(0.3, L*0.07);
-    const leafC = lerpColor(c0, '#ffffff', 0.80);
+    const leafC = lerpColor(c0, '#ffffff', 0.52);
     /* SODDALIK: har tokchada FAQAT BITTA shakl. Sinovda palmetta ustiga
        yon gajaklar qo'shilganda ular bir-birini bosib, dog' hosil qildi —
        tokcha o'lchami buning uchun juda kichik. */
@@ -3002,9 +3053,9 @@ function drawMuqarnasIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
         const am = TAU*(i+0.5)/m - Math.PI/2;
         const base = pol(am, r - drop*0.10);
         if(l === 0 && L > sw*3.2)
-          palmetteFan(ctx, base[0], base[1], am + Math.PI, L*1.05, 3, leafC, edge, fine*0.7);
+          palmetteFan(ctx, base[0], base[1], am + Math.PI, L, 3, leafC, edge, fine*0.7);
         else
-          tearDrop(ctx, base[0], base[1], am + Math.PI, L, L*0.40, leafC, edge, fine*0.7);
+          tearDrop(ctx, base[0], base[1], am + Math.PI, L, L*0.38, leafC, edge, fine*0.7);
       }
     }
     /* 3) ravoq lentasi — eng ustida */
@@ -3016,17 +3067,17 @@ function drawMuqarnasIslimiy(ctx, R, p, sw, c0, c1, c2, c3){
       ctx.bezierCurveTo(A[0]*(1-drop/r*0.5),A[1]*(1-drop/r*0.5), M[0]+(A[0]-B[0])*0.15,M[1]+(A[1]-B[1])*0.15, M[0],M[1]);
       ctx.bezierCurveTo(M[0]+(B[0]-A[0])*0.15,M[1]+(B[1]-A[1])*0.15, B[0]*(1-drop/r*0.5),B[1]*(1-drop/r*0.5), B[0],B[1]);
     }
-    ribbon(ctx, lerpColor(band,'#ffffff',0.45), shade(band,0.5), sw*1.6+0.9);
+    ribbon(ctx, lerpColor(band,'#ffffff',0.62), shade(band,0.55), sw*1.5+0.8);
   }
   /* markaziy gul */
   const rc = R*0.94*Math.pow(0.72, levels);
   ctx.beginPath(); circle(ctx, 0, 0, rc);
-  fillA(ctx, lerpColor(c1,'#000000',0.28), 0.95);
+  fillSolid(ctx, lerpColor(c1,'#000000',0.18));
   st(ctx, shade(c0,0.6), sw*0.8);
   rosetteInCell(ctx, (()=>{ const q=[]; for(let i=0;i<24;i++) q.push(pol(TAU*i/24, rc*0.97)); return q; })(),
                 Math.max(6, p.sym),
-                { sw:Math.max(0.3, rc*0.045), cStem:lerpColor(c0,'#ffffff',0.50),
-                  cLeaf:lerpColor(c0,'#ffffff',0.78), cEdge:shade(c0,0.66) });
+                { sw:Math.max(0.3, rc*0.045), cStem:lerpColor(c0,'#ffffff',0.35),
+                  cLeaf:lerpColor(c0,'#ffffff',0.58), cEdge:shade(c0,0.66) });
   ctx.beginPath(); circle(ctx, 0, 0, R*0.99); st(ctx, shade(c2,0.3), sw*0.6);
 }
 
@@ -4414,7 +4465,10 @@ function drawPICPattern(ctx, R, p, sw, c0, c1, c2, c3){
    qarshi chetdan aynan davom etadi. So'ng createPattern('repeat') bilan
    istalgan o'lchamga cho'ziladi: chok nolga TENG, taxmin yo'q.
    ════════════════════════════════════════════════════════════════ */
-function picSeamlessTile(p, cellPx, dpr){
+/* styleMod — kombinatsiyalar uchun: u style ob'yektiga infill ilgagini
+   va katak ranglarini qo'yadi. Shu tufayli o'simliksimon to'ldirish ham
+   MATEMATIK ANIQ DAVRIY plitkaga tushadi va rapport chetida uzilmaydi. */
+function picSeamlessTile(p, cellPx, dpr, styleMod){
   var tile = PIC_TILINGS[p.tile] ? p.tile : 't488';
   if(picIsRadial(tile)) return null;              /* medalyon davriy emas */
   var us = PIC_USCALE[tile] || 1;
@@ -4439,7 +4493,9 @@ function picSeamlessTile(p, cellPx, dpr){
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.fillStyle = pal.c[4];
   c.fillRect(0, 0, pw, ph);
-  picRender(c, M, picStyleFrom(pal, p, unit));
+  var stl = picStyleFrom(pal, p, unit);
+  if(typeof styleMod === 'function') styleMod(stl, M, unit, pal);
+  picRender(c, M, stl);
   return {canvas: cv, w: pw, h: ph};
 }
 
@@ -6324,9 +6380,17 @@ function rapportSize(px, group){
   const g = GRIDS[group] || GRIDS.p4;
   const { c, H0 } = rapportBase(px, g.hex);
   let W = c, H = H0;
-  if(typeof PIC_PATTERN !== 'undefined' && PIC_PATTERN[P.type] && !picIsRadial(picTileOf(P.type))){
+  const cmbR = (typeof COMBO_SPEC !== 'undefined') ? COMBO_SPEC[P.type] : null;
+  const isCmbR = !!(cmbR && !picIsRadial(cmbR.tile));
+  if((typeof PIC_PATTERN !== 'undefined' && PIC_PATTERN[P.type] && !picIsRadial(picTileOf(P.type))) || isCmbR){
     try{
-      const t0 = picSeamlessTile({ ...P, tile: picTileOf(P.type) }, Math.max(24, Math.round(c/3)), 1);
+      /* O'LCHAM BASHORATI chizish bilan AYNAN bir xil yo'ldan borishi shart,
+         aks holda panelda ko'rsatilgan rapport o'lchami fayldagidan farq
+         qiladi. Shuning uchun bu yerda ham kombinatsiya konfiguratsiyasi
+         hisobga olinadi. */
+      const tlR = isCmbR ? cmbR.tile : picTileOf(P.type);
+      const t0 = picSeamlessTile({ ...P, tile: tlR, dvar:(P.dvar|0)+(isCmbR?(cmbR.dvar||0):0) },
+                                 Math.max(24, Math.round(c/3*(isCmbR && cmbR.unitK ? cmbR.unitK : 1))), 1);
       if(t0 && t0.w > 2 && t0.h > 2){
         W = Math.round(t0.w*Math.max(1, Math.round(W/t0.w)));
         H = Math.round(t0.h*Math.max(1, Math.round(H/t0.h)));
@@ -6384,11 +6448,23 @@ function makeSeamlessRepeatCore(px, group, opts){
      keyingi doira oldingisining lentalarini O'CHIRIB yuboradi — natijada
      bir tekis rangli blok chiqadi. Shuning uchun ular medalyon nusxalari
      sifatida emas, UZLUKSIZ MAYDON sifatida chiziladi. */
-  if(typeof PIC_PATTERN !== 'undefined' && PIC_PATTERN[P.type] && !picIsRadial(picTileOf(P.type))){
-    const pp = { ...P, tile: picTileOf(P.type) };
+  /* PIC NAQSHLARI VA KOMBINATSIYALAR — matematik aniq davriy plitka.
+     Kombinatsiyalar ilgari bu yo'ldan ketmas, panjara nusxalari sifatida
+     chizilardi; natijada har nusxa alohida medalyon bo'lib, rapport
+     chetida lenta UZILARDI. Endi ular ham shu yerda. */
+  const cmb0 = (typeof COMBO_SPEC !== 'undefined') ? COMBO_SPEC[P.type] : null;
+  const isPic0 = (typeof PIC_PATTERN !== 'undefined' && PIC_PATTERN[P.type] && !picIsRadial(picTileOf(P.type)));
+  const isCmb0 = !!(cmb0 && !picIsRadial(cmb0.tile));
+  if(isPic0 || isCmb0){
+    const tl = isCmb0 ? cmb0.tile : picTileOf(P.type);
+    const pp = { ...P, tile: tl, dvar: (P.dvar|0) + (isCmb0 ? (cmb0.dvar||0) : 0) };
     /* bir davrli aniq plitka — matematik jihatdan chok-suz */
-    const unit0 = Math.max(24, Math.round(c/3));
-    const t0 = picSeamlessTile(pp, unit0, 1);
+    const unit0 = Math.max(24, Math.round(c/3*(isCmb0 && cmb0.unitK ? cmb0.unitK : 1)));
+    const sm = isCmb0 ? comboStyleMod(cmb0, P, PAL[P.pal]?PAL[P.pal].c[0]:'#b8912f',
+                                      PAL[P.pal]?PAL[P.pal].c[1]:'#1d3a63',
+                                      PAL[P.pal]?PAL[P.pal].c[2]:'#6e5312',
+                                      PAL[P.pal]?PAL[P.pal].c[3]:'#3f6a95') : null;
+    const t0 = picSeamlessTile(pp, unit0, 1, sm);
     if(t0 && t0.w > 2 && t0.h > 2){
       /* rapportni davrning BUTUN karralisiga yaxlitlaymiz — shundagina
          takrorlash chetlarida siljish bo'lmaydi */
