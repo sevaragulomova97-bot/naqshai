@@ -2689,7 +2689,7 @@ function vineInCell(ctx, poly, o){
     }
   }
   /* 4) ASOSDA KICHIK TOMCHI — motivni "ildiz"ga bog'laydi */
-  if(ci.rin > pad*3)
+  if(!o.sodda && ci.rin > pad*3)
     tearDrop(ctx, bx, by, a0 + Math.PI, Math.min(ci.rin*0.75, Lr*0.14),
              Math.min(ci.rin*0.75, Lr*0.14)*0.42, o.cStem, o.cEdge, o.sw*0.6);
   ctx.restore();
@@ -2708,10 +2708,10 @@ function rosetteInCell(ctx, poly, n, o){
   /* SODDALIK: gulbarglar orasiga qo'shimcha gajak QO'YILMAYDI. Sinovda
      ular gulni loyqalantirib, katak zaminini butunlay yopib qo'ydi.
      Ma'lumotnoma asarlarda gul — sanoqli, yirik va ochiq. */
-  const inner = [];
-  for(let i = 0; i < n; i++)
-    tearDrop(ctx, 0, 0, TAU*(i+0.5)/n + ph, r*0.54, r*0.15,
-             lerpColor(o.cLeaf, o.cEdge, 0.28), o.cEdge, o.sw*0.5);
+  if(!o.sodda)
+    for(let i = 0; i < n; i++)
+      tearDrop(ctx, 0, 0, TAU*(i+0.5)/n + ph, r*0.54, r*0.15,
+               lerpColor(o.cLeaf, o.cEdge, 0.28), o.cEdge, o.sw*0.5);
   for(let i = 0; i < n; i++)
     tearDrop(ctx, 0, 0, TAU*i/n + ph, r*0.88, r*0.235, o.cLeaf, o.cEdge, o.sw*0.5);
   /* markaz */
@@ -2892,12 +2892,29 @@ const COMBO_SPEC = {
 function comboFill(ctx, M, p, cfg, c0, c1, c2, c3){
   const u = M.unit || 1;
   const ink = cfg.ink(c0, c1, c2, c3);
+  /* Tessellatsiyada (NORING qo'yilganda) naqsh KICHIK ko'rinadi — matoda,
+     koshinda yoki 3D yuzada. U yerda ikkinchi qator gulbarg ham, asosdagi
+     tomchi ham o'qilmaydi, lekin vektor eksportida kontur sonini ikki
+     barobar oshiradi. Shuning uchun u rejimda soddalashtirilgan variant
+     chiziladi. */
   const o = { sw:Math.max(0.35, u*0.034), cStem:ink[0], cLeaf:ink[1], cEdge:ink[2],
-              dens:p.dens, cmp:p.cmp };
-  const fs = M.faces || [];
+              dens:p.dens, cmp:p.cmp, sodda: !!NORING };
+  /* BEZAK BYUDJETI. Har katakka to'liq motiv chizilsa, tessellatsiyada
+     kataklar soni ko'payib ketadi va vektor eksporti portlaydi:
+     o'lchovda gi naqshi 100 mm da 94 877 kontur va 40.6 MB DXF berdi
+     (28 soniya), holbuki xavfsiz chegara ~10 MB.
+     Yechim ham texnik, ham tarixiy jihatdan to'g'ri: usta ham nafis
+     bezakni FAQAT yirik kataklarga soladi, mayda kataklar sirlangan
+     zamin bo'lib qoladi. Shuning uchun yuzalar kattaligi bo'yicha
+     tartiblanib, eng yiriklari bezatiladi. */
+  const all = (M.faces || []).map((f, i) => ({ f, i, ci: cellInfo(f.poly) }))
+                             .filter(q => q.ci.rin >= u*0.11);
+  all.sort((a, b) => b.ci.rin - a.ci.rin);
+  const BUDJET = 30;
+  const fs = all.slice(0, BUDJET).map(q => q.f);
+  const cis = all.slice(0, BUDJET).map(q => q.ci);
   for(let i = 0; i < fs.length; i++){
-    const f = fs[i], ci = cellInfo(f.poly);
-    if(ci.rin < u*0.11) continue;
+    const f = fs[i], ci = cis[i];
     o.phase = (i % 2) ? Math.PI/Math.max(4, f.n) : 0;
     if(cfg.motif === 'knot'){
       if(ci.rin > u*0.22) girihKnotInCell(ctx, f.poly, f.n >= 8 ? 8 : 6, o);

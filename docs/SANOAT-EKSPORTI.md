@@ -524,3 +524,31 @@ beradi. Koshinkorlikda esa sirlash **to'liq qoplama** bo'ladi. Shuning
 uchun kombinatsiya bezaklari va muqarnas tokchalari `fillSolid()` bilan
 to'ldiriladi: shaffoflik yo'q, lekin chiziq rejimi (lazer/CNC) baribir
 hurmat qilinadi — `fillHard()` dan farqi aynan shu.
+
+### Bezak byudjeti
+
+Kombinatsiyalarni chok-suz rapportga o'tkazgandan keyin vektor eksporti
+portladi: `gi` naqshi 100 mm da **94 877 kontur** va **40.6 MB DXF**
+berdi (28 soniya), holbuki kutubxonaning qolgan qismida eng katta fayl
+10 MB edi. Sabab — endi har katakka to'liq motiv chizilardi, kataklar
+soni esa tessellatsiyada juda ko'p.
+
+Yechim ham texnik, ham tarixiy jihatdan to'g'ri: **usta ham nafis
+bezakni faqat yirik kataklarga soladi**, mayda kataklar sirlangan zamin
+bo'lib qoladi. Shuning uchun yuzalar ichki radiusi bo'yicha tartiblanib,
+eng yiriklari (30 ta) bezatiladi.
+
+Ikkinchi chora — tessellatsiyada (`NORING` qo'yilganda) soddalashtirilgan
+variant: u yerda naqsh matoda yoki 3D yuzada **kichik** ko'rinadi, ikkinchi
+qator gulbarg ham, asosdagi tomchi ham o'qilmaydi, lekin kontur sonini
+ikki barobar oshiradi.
+
+| Naqsh | Oldin | Keyin |
+|---|---|---|
+| `gi` | 40.6 MB / 28.0 s | **10.2 MB / 5.3 s** |
+| `xr` | 25.2 MB / 32.0 s | **9.5 MB / 1.6 s** |
+| `sg` | 1.7 MB | 1.7 MB |
+| `mi` | 5.2 MB | 5.2 MB |
+
+Medalyon ko'rinishida soddalashtirish qo'llanmaydi — u yerda naqsh katta
+ko'riladi va to'liq boyligicha chiziladi.
