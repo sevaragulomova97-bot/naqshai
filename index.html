@@ -2620,7 +2620,33 @@ function cellInfo(poly){
     const d = Math.abs((ex*(cy-P[1]) - ey*(cx-P[0]))/L);
     if(d < rin) rin = d;
   }
-  return { C:[cx,cy], rin: isFinite(rin) ? rin : 0, area: Math.abs(A) };
+  /* CHO'ZIQLIK — katak shaklining o'lchovi: eng uzun diagonal ichki
+     doira diametriga nisbati. 1 ga yaqin = muntazam, doira kabi
+     (yulduz, olti burchak) — unga shamsa/gul yarashadi. 1.7 dan katta =
+     cho'ziq mokisimon katak — unga gul emas, o'q bo'ylab o'sadigan
+     islimiy novda yarashadi. Motivni KATTALIK emas, SHAKL belgilashi
+     kerak: aks holda turli shakldagi kataklarga bir xil gul tushib,
+     naqsh bir xil gulning oboysiga aylanadi. */
+  let dmax = 0;
+  for(let i = 0; i < n; i++)
+    for(let j = i+1; j < n; j++){
+      const d = Math.hypot(poly[i][0]-poly[j][0], poly[i][1]-poly[j][1]);
+      if(d > dmax) dmax = d;
+    }
+  const rr = isFinite(rin) ? rin : 0;
+  /* SAMARALI RADIUS. Yulduzsimon katakda rin (markazdan eng yaqin
+     qirragacha) katakning haqiqiy kattaligidan ancha kichik chiqadi:
+     20 nurli yulduz katakda rin yulduzning ICHKI doirasi bo'ladi.
+     Shuning uchun motiv rin bo'yicha o'lchansa, ulkan yulduz ichiga
+     kichkina gul tushib qoladi — shamsa+girihda markaziy yulduz aynan
+     shunday bo'sh ko'rinardi. Yuza bo'yicha hisoblangan radius bu
+     xatodan xoli, chunki u yulduz nurlarini ham hisobga oladi.
+     Motivlar katak konturiga qirqilgani uchun kattaroq chizish xavfsiz —
+     usta ham yulduz katakni to'liq to'ldiradi. */
+  const ar = Math.abs(A);
+  const reff = Math.min(dmax*0.5, Math.max(rr, Math.sqrt(ar/Math.PI)*1.12));
+  return { C:[cx,cy], rin: rr, area: ar, reff: reff,
+           dmax: dmax, elong: rr > 1e-9 ? dmax/(2*rr) : 1 };
 }
 /* Nuqtadan katak chegarasigacha masofa — barg uzunligini shu belgilaydi,
    shuning uchun barg hech qachon lentadan oshib ketmaydi. */
@@ -2698,7 +2724,7 @@ function vineInCell(ctx, poly, o){
    va ular orasida kichik gajaklar. Spiral chalkashligi yo'q. */
 function rosetteInCell(ctx, poly, n, o){
   const ci = cellInfo(poly);
-  const r = ci.rin, pad = o.sw*1.1;
+  const r = (o.sodda ? ci.rin : (ci.reff || ci.rin)), pad = o.sw*1.1;
   if(!(r > pad*3)) return;
   n = Math.max(5, Math.min(12, n || 8));
   ctx.save();
@@ -2721,11 +2747,65 @@ function rosetteInCell(ctx, poly, n, o){
   fillHard(ctx, o.cLeaf, 0.95);
   ctx.restore();
 }
+/* CHO'ZIQ KATAK — BODOM BARGI (lanset).
+   Mokisimon ulagich katakka novda chizilsa, u to'g'ri tayoq ustidagi
+   tugun — ya'ni "o'q" bo'lib ko'rinadi, islimiy emas. Temuriy
+   koshinkorligida bunday katakka katakning o'zi kabi cho'zilgan,
+   ikki uchi o'tkir bodom bargi solinadi: sodda, nafis va katak
+   shaklini takrorlagani uchun kompozitsiyaga singib ketadi. */
+function leafInCell(ctx, poly, o){
+  const ax = cellAxis(poly);
+  const ci = cellInfo(poly);
+  const L = ax.len;
+  if(!(L > 1e-6) || ci.rin < o.sw*2.2) return;
+  const dx = (ax.tip[0]-ax.base[0])/L, dy = (ax.tip[1]-ax.base[1])/L;
+  const nx = -dy, ny = dx;
+  /* barg katak ichida qolishi uchun: uzunlik diagonaldan sal qisqa,
+     kengligi ichki doiradan oshmaydi */
+  const Lf = L*0.86, w = Math.min(ci.rin*0.80, Lf*0.19);
+  if(w < o.sw*1.1) return;
+  const mx = (ax.base[0]+ax.tip[0])/2, my = (ax.base[1]+ax.tip[1])/2;
+  const b = [mx - dx*Lf/2, my - dy*Lf/2], t = [mx + dx*Lf/2, my + dy*Lf/2];
+  ctx.save();
+  ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
+  /* ikki yoyli bodom: asosdan uchgacha, ikki tomoni ko'zgu-simmetrik */
+  ctx.beginPath();
+  ctx.moveTo(b[0], b[1]);
+  ctx.quadraticCurveTo(mx + nx*w*1.33, my + ny*w*1.33, t[0], t[1]);
+  ctx.quadraticCurveTo(mx - nx*w*1.33, my - ny*w*1.33, b[0], b[1]);
+  ctx.closePath();
+  fillSolid(ctx, o.cLeaf); st(ctx, o.cEdge, o.sw*0.7);
+  /* o'rta tomir — bargga hajm beradi; mayda o'lchamda chizilmaydi */
+  if(!o.sodda && w > o.sw*2.6){
+    ctx.beginPath();
+    ctx.moveTo(b[0] + dx*Lf*0.14, b[1] + dy*Lf*0.14);
+    ctx.lineTo(t[0] - dx*Lf*0.14, t[1] - dy*Lf*0.14);
+    st(ctx, o.cEdge, o.sw*0.5);
+    /* asosda kichik tugun — bargni katak uchiga "bog'laydi" */
+    ctx.beginPath(); circle(ctx, b[0] + dx*Lf*0.06, b[1] + dy*Lf*0.06, w*0.26);
+    fillSolid(ctx, o.cStem); st(ctx, o.cEdge, o.sw*0.45);
+  }
+  ctx.restore();
+}
 /* Kichik katak — bitta tomchi. Undan ortig'i bu o'lchamda shovqin. */
 function budInCell(ctx, poly, o){
   const ci = cellInfo(poly);
   if(!(ci.rin > o.sw*2.4)) return;
-  const ang = Math.atan2(ci.C[1], ci.C[0]);
+  /* YO'NALISH KATAKNING O'Z O'QIDAN olinadi.
+     Ilgari u koordinata boshiga nisbatan hisoblanardi
+     (atan2(C[1],C[0])), ya'ni kurtak katakning RAPPORTDAGI MUTLAQ
+     o'rniga bog'liq edi. Bu ikki jihatdan xato:
+       1) chok testi buni aniqladi — rapport chetidagi katak qo'shni
+          nusxada boshqa burchakda chizilib, mato yoki koshinda
+          KO'RINADIGAN CHOK hosil qilardi;
+       2) badiiy jihatdan ham noto'g'ri — kurtak katak shakliga
+          emas, tasodifiy yo'nalishga qarab yotardi.
+     Katakning eng uzun diagonali bo'ylab yo'naltirilsa, motiv
+     ko'chirishga nisbatan o'zgarmas bo'ladi va katakka singib ketadi. */
+  const ax = cellAxis(poly);
+  let ang;
+  if(ax && ax.len > 1e-6) ang = Math.atan2(ax.tip[1]-ax.base[1], ax.tip[0]-ax.base[0]);
+  else                    ang = 0;
   ctx.save();
   ctx.beginPath(); polyPath(ctx, poly); ctx.clip();
   tearDrop(ctx, ci.C[0] - Math.cos(ang)*ci.rin*0.55, ci.C[1] - Math.sin(ang)*ci.rin*0.55,
@@ -2874,7 +2954,12 @@ function islimiyFaces(ctx, M, p, sw, cStem, cLeaf, cEdge, opt){
    funksiyasi ichida turgani uchun rapport boshqa yo'ldan ketib,
    kombinatsiyalar chok bilan takrorlanardi. */
 const COMBO_SPEC = {
-  gi: { tile:'t488', unitK:1.25, bandK:1.0,
+  /* bandK 1.0 → 0.70: o'lchov va ko'rik lenta naqshning ~25% ini
+     egallaganini ko'rsatdi — natijada girih emas, "panjara to'siq"
+     ko'rinishi chiqardi va oltin zamin siqilib qolardi. Tarixiy
+     namunalarda lenta ingichka, zamin keng: shunda girih tugunlari
+     o'qiladi va islimiy to'ldirishga joy qoladi. */
+  gi: { tile:'t488', unitK:1.25, bandK:0.70,
         regionPal:(a,b,c,d)=>[ lerpColor(b,'#000000',0.34), lerpColor(c,'#000000',0.16),
                                lerpColor(d,'#000000',0.06), lerpColor(b,'#000000',0.22) ],
         ink:(a,b,c,d)=>[ lerpColor(a,'#ffffff',0.62), lerpColor(a,'#ffffff',0.78), shade(a,0.70) ],
@@ -2884,7 +2969,12 @@ const COMBO_SPEC = {
                                lerpColor(a,'#000000',0.30), lerpColor(c,'#000000',0.10) ],
         ink:(a,b,c,d)=>[ lerpColor(a,'#ffffff',0.60), lerpColor(a,'#ffffff',0.80), shade(a,0.70) ],
         motif:'rumi' },
-  sg: { tile:'shamsa10', unitK:1.0, bandK:1.0,
+  /* radK — medalyon rejimida skelet radiusi. shamsa10 RADIAL skelet:
+     uning geometriyasi R dan kelib chiqadi, shuning uchun unitK unga
+     ta'sir qilmaydi. To'liq R da tashqi yulduzlar halqasi medalyon
+     doirasidan oshib, kesilib qolardi — naqsh "tugallanmagan" ko'rinardi.
+     0.86 da tashqi halqa butunlay disk ichiga sig'adi. */
+  sg: { tile:'shamsa10', unitK:1.0, radK:0.93, ground:true, bandK:1.0,
         ink:(a,b,c,d)=>[ shade(a,0.35), lerpColor(b,'#ffffff',0.26), shade(a,0.62) ],
         motif:'knot' }
 };
@@ -2910,23 +3000,60 @@ function comboFill(ctx, M, p, cfg, c0, c1, c2, c3){
   const all = (M.faces || []).map((f, i) => ({ f, i, ci: cellInfo(f.poly) }))
                              .filter(q => q.ci.rin >= u*0.11);
   all.sort((a, b) => b.ci.rin - a.ci.rin);
-  const BUDJET = 30;
+  /* Byudjet REJIMGA bog'liq. Kontur portlashi FAQAT tessellatsiyada
+     bo'lgan: u yerda bitta rapport yuzlab marta takrorlanadi, shuning
+     uchun 30 chegarasi o'sha yerda qoladi. Medalyon rejimida esa naqsh
+     bir marta chiziladi — u yerda 30 chegarasi faqat zarar keltirardi:
+     eng yirik 30 katakka bir xil gul tushib, qolgan barcha kataklar
+     bo'm-bo'sh qolardi va kompozitsiya "teshiklarga qo'yilgan gullar"
+     bo'lib ko'rinardi. Kengaytirilgan byudjetda o'rta kataklarga novda,
+     maydalariga kurtak tushadi — haqiqiy kompozitsiya shunday quriladi. */
+  const BUDJET = NORING ? 30 : 900;
   const fs = all.slice(0, BUDJET).map(q => q.f);
   const cis = all.slice(0, BUDJET).map(q => q.ci);
   for(let i = 0; i < fs.length; i++){
     const f = fs[i], ci = cis[i];
     o.phase = (i % 2) ? Math.PI/Math.max(4, f.n) : 0;
-    if(cfg.motif === 'knot'){
-      if(ci.rin > u*0.22) girihKnotInCell(ctx, f.poly, f.n >= 8 ? 8 : 6, o);
-      else                budInCell(ctx, f.poly, o);
-    } else if(cfg.motif === 'rumi'){
-      if(ci.rin > u*0.34)      rosetteInCell(ctx, f.poly, 6, o);
-      else if(ci.rin > u*0.20) vineInCell(ctx, f.poly, o);
-      else                     budInCell(ctx, f.poly, o);
+    /* MOTIVNI KATAK SHAKLI TANLAYDI.
+       Ilgari tanlov faqat katak kattaligiga qarardi va o'lchov shuni
+       ko'rsatdi: xatam-rumida ikkala katak sinfi ham (cho'ziqligi 2.00
+       va 1.15 bo'lgan, ya'ni butunlay boshqa shakldagi 12 va 6 qirrali
+       kataklar) bitta shartga tushib, 383 ta BIR XIL 6 bargli gul
+       chizilardi. Girih-islimiyda esa 541 ta mayda katak chegaradan
+       o'tolmay bo'm-bo'sh qolardi.
+       Endi: cho'ziq katak — o'q bo'ylab o'sadigan novda, muntazam
+       katak — shamsa/gul, mayda katak — kurtak. Usta ham shunday
+       ishlaydi: shakl motivni belgilaydi. */
+    const el = ci.elong || 1;
+    const KURTAK = u*0.115, NOVDA = u*0.175, GUL = u*0.26;
+    if(ci.rin < KURTAK){
+      /* juda mayda — hech narsa: shovqin bo'ladi */
+    } else if(ci.rin < NOVDA){
+      budInCell(ctx, f.poly, o);
+    } else if(el >= 1.75 && ci.rin <= u*0.30){
+      /* TOR va cho'ziq — mokisimon ulagich katak: bodom bargi.
+         Bu yerga novda chizilsa, to'g'ri tayoq ustidagi tugun,
+         ya'ni "o'q" bo'lib ko'rinadi. */
+      leafInCell(ctx, f.poly, o);
+    } else if(el >= 1.75){
+      /* KENG va cho'ziq — bu yirik YULDUZ katak (xatamda 12 qirrali).
+         O'lchov: cho'ziqligi 2.00, ichki radiusi 0.43u. Unga novda
+         chizilganda ham xuddi shunday "o'q" chiqardi. Klassik yechim —
+         "girih ichida girih": yirik yulduz katakka kichik yulduz tugun
+         solinadi, shunda naqsh ikki miqyosda o'qiladi. */
+      girihKnotInCell(ctx, f.poly, f.n >= 10 ? Math.round(f.n/2) : 6, o);
+    } else if(cfg.motif === 'knot' && ci.rin > u*0.22){
+      girihKnotInCell(ctx, f.poly, f.n >= 8 ? 8 : 6, o);
+    } else if(ci.rin > GUL){
+      /* Gulbarg soni katakning TABIIY simmetriyasidan olinadi.
+         Ilgari qirra soni to'g'ridan-to'g'ri berilardi: 16 qirrali
+         katakka 12 bargli gul chiqib (chegara), romashkaga o'xshab
+         qolardi. 16 qirrali katak aslida 8 ta o'qqa ega — shamsa ham
+         8 bargli bo'lishi kerak. */
+      const nb = cfg.motif === 'rumi' ? 6 : (f.n > 12 ? Math.round(f.n/2) : f.n);
+      rosetteInCell(ctx, f.poly, nb, o);
     } else {
-      if(f.rank === 0 && ci.rin > u*0.26) rosetteInCell(ctx, f.poly, f.n, o);
-      else if(ci.rin > u*0.19)            vineInCell(ctx, f.poly, o);
-      else                                budInCell(ctx, f.poly, o);
+      budInCell(ctx, f.poly, o);
     }
   }
 }
@@ -2934,7 +3061,17 @@ function comboFill(ctx, M, p, cfg, c0, c1, c2, c3){
 function comboStyleMod(cfg, p, c0, c1, c2, c3){
   return function(stl, M){
     if(cfg.regionPal) stl.regionPal = cfg.regionPal(c0, c1, c2, c3);
-    if(cfg.bandK) stl.bandW = Math.max(0.8, stl.bandW*cfg.bandK);
+    /* LENTANI INGICHKALASH — FAQAT MEDALYONDA.
+       comboStyleMod faqat rapport (tessellatsiya) yo'lida chaqiriladi.
+       Medalyonda lentani 0.70 ga ingichkalash to'g'ri bo'ldi: u yerda
+       naqsh yirik chiziladi va qalin lenta zaminni bo'g'ib qo'yardi.
+       Buyum yuzasida esa aynan shu rapport o'nlab marta takrorlanadi —
+       ingichka lenta mayda bo'lib qolib, naqsh "to'r"ga aylanadi va
+       koshinda ham, matoda ham yo'qoladi. Shuning uchun bu yerda
+       ingichkalash qo'llanmaydi; qalinlashtirish (bandK > 1) esa
+       o'z kuchida qoladi. */
+    const bk = Math.max(cfg.bandK || 1, 1);
+    if(bk !== 1) stl.bandW = Math.max(0.8, stl.bandW*bk);
     stl.infill = (c, m) => comboFill(c, m, p, cfg, c0, c1, c2, c3);
   };
 }
@@ -2943,7 +3080,10 @@ function comboStyleMod(cfg, p, c0, c1, c2, c3){
 function comboPIC(ctx, R, p, sw, c0, c1, c2, c3, cfg){
   const pal = PAL[p.pal] || PAL.gold;
   const pp = { ...p, tile: cfg.tile, dvar: (p.dvar|0) + (cfg.dvar||0) };
-  const spec = picSpecFrom(pp, R);
+  /* radK faqat MEDALYON rejimida: tessellatsiyada radiusni kichraytirish
+     qo'shni nusxalar orasida bo'shliq ochib yuboradi. */
+  const Rp = (cfg.radK && !NORING) ? R*cfg.radK : R;
+  const spec = picSpecFrom(pp, Rp);
   if(cfg.unitK) spec.unit = Math.max(R*0.08, spec.unit*cfg.unitK);
   const M = picGet(spec);
   const style = picStyleFrom(pal, pp, spec.unit);
@@ -2967,6 +3107,13 @@ function comboPIC(ctx, R, p, sw, c0, c1, c2, c3, cfg){
   ctx.save();
   if(!ctx._svg && !picIsRadial(cfg.tile) && !tess){
     ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU); ctx.clip();
+    ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU); picFlatFill(ctx, pal.c[4]);
+  } else if(!ctx._svg && !tess && cfg.ground){
+    /* RADIAL skeletda medalyon zamini bo'yalmasdi: naqsh atrofida
+       sahifa foni ko'rinib, kompozitsiya "tugallanmagan, oqargan"
+       bo'lib qolardi. Radiusi kichraytirilgan skelet ostiga to'liq
+       zamin qo'yiladi — shunda medalyon yaxlit maydon bo'lib o'qiladi.
+       Qirqish (clip) qo'yilmaydi: radial skelet R ichida yotadi. */
     ctx.beginPath(); ctx.arc(0, 0, R*0.995, 0, TAU); picFlatFill(ctx, pal.c[4]);
   }
   picRender(ctx, M, style);
@@ -2997,7 +3144,7 @@ function drawXatamRumi(ctx, R, p, sw, c0, c1, c2, c3){
 /* SHAMSA + GIRIH — ikki miqyosdagi geometriya: girih ichida girih. */
 function girihKnotInCell(ctx, poly, n, o){
   const ci = cellInfo(poly);
-  const r = ci.rin;
+  const r = o.sodda ? ci.rin : (ci.reff || ci.rin);
   if(!(r > o.sw*3)) return;
   n = Math.max(5, Math.min(10, n || 6));
   ctx.save();
@@ -4507,7 +4654,18 @@ function picSeamlessTile(p, cellPx, dpr, styleMod){
   var c = cv.getContext('2d');
   if(!c) return null;
   var pal = PAL[p.pal] || PAL.gold;
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  /* PLITKA KANVASI AYNAN BIR DAVRGA MOSLANADI.
+     Davr (pw, ph) — kasr son, kanvas esa butun piksel
+     (Math.round(pw*dpr)). Ilgari chizma dpr masshtabida tushardi,
+     ya'ni kanvasning o'ng/past cheti bir davrga to'g'ri kelmasdi.
+     createPattern(...,'repeat') kanvasni BUTUN kengligida takrorlagani
+     uchun har takrorlanishda ~0.4 piksel siljish to'planib, matoda va
+     koshinda KO'RINADIGAN CHOK chiqardi (o'lchov: xatam-rumi 1.89/1.25).
+     Masshtab kanvas/davr nisbatidan olinsa, butun kanvas aynan bitta
+     davrni ushlaydi. Cho'zilish 0.5 pikseldan kam — ko'zga ko'rinmaydi,
+     lekin davriylik matematik jihatdan aniq bo'ladi. */
+  var sx = cv.width/pw, sy = cv.height/ph;
+  c.setTransform(sx, 0, 0, sy, 0, 0);
   c.fillStyle = pal.c[4];
   c.fillRect(0, 0, pw, ph);
   var stl = picStyleFrom(pal, p, unit);
@@ -6483,11 +6641,21 @@ function makeSeamlessRepeatCore(px, group, opts){
                                       PAL[P.pal]?PAL[P.pal].c[3]:'#3f6a95') : null;
     const t0 = picSeamlessTile(pp, unit0, 1, sm);
     if(t0 && t0.w > 2 && t0.h > 2){
-      /* rapportni davrning BUTUN karralisiga yaxlitlaymiz — shundagina
-         takrorlash chetlarida siljish bo'lmaydi */
-      const nx = Math.max(1, Math.round(W / t0.w));
-      const ny = Math.max(1, Math.round(H / t0.h));
-      const W2 = Math.round(t0.w*nx), H2 = Math.round(t0.h*ny);
+      /* RAPPORT DAVRI PLITKANING BUTUN PIKSEL O'LCHAMIDAN olinadi.
+         Ilgari u t0.w / t0.h — plitkaning KASR davridan hisoblanardi.
+         Ammo picSeamlessTile kanvasni butun piksellarga yaxlitlaydi
+         (Math.round(pw*dpr)), createPattern(...,'repeat') esa aynan shu
+         BUTUN kenglikda takrorlaydi. Ikkisi mos kelmaganda har
+         takrorlanishda ~0.4 piksel siljish to'planib, rapport chetida
+         KO'RINADIGAN CHOK hosil bo'lardi.
+         O'lchov: xatam-rumida (unitK 1.15, davr kasr) chok nisbati
+         1.89/1.25; unitK 1.0 da (davr butun) aynan 0.00/0.00.
+         Endi davr har doim butun bo'lgani uchun bu nomuvofiqlik
+         umuman yuzaga kelmaydi — barcha PIC naqshlari uchun. */
+      const tw = t0.canvas.width, th = t0.canvas.height;
+      const nx = Math.max(1, Math.round(W / tw));
+      const ny = Math.max(1, Math.round(H / th));
+      const W2 = tw*nx, H2 = th*ny;
       cv.width = W2; cv.height = H2;
       const c2 = cv.getContext('2d');
       c2.fillStyle = pal.bg; c2.fillRect(0, 0, W2, H2);
@@ -8539,11 +8707,14 @@ function animatePaint3D(){
 function setLights(preset){
   if(!T3) return;
   const cfg = {
-    warm:  {amb:0x9c8867, ai:0.5, hemi:0.75, key:0xffe2b8, ki:1.25, fill:0xffc890, fi:0.45, bg:0xf0e9da},
-    cold:  {amb:0x66788c, ai:0.5, hemi:0.7,  key:0xd6ecff, ki:1.2,  fill:0x9dbdd8, fi:0.45, bg:0xe8eef2},
-    studio:{amb:0xffffff, ai:0.45,hemi:0.65, key:0xffffff, ki:1.3,  fill:0xffffff, fi:0.55, bg:0xf3f3ef},
-    dark:  {amb:0x24301f, ai:0.2, hemi:0.15, key:0xd8e0c0, ki:0.7,  fill:0x445533, fi:0.2,  bg:0x181e18}
-  }[preset] || {amb:0xffffff, ai:0.45, hemi:0.6, key:0xffffff, ki:1.25, fill:0xffffff, fi:0.5, bg:0xf3f3ef};
+    /* Quvvatlar ACES tone mapping bilan muvozanatlangan: oldingi
+       qiymatlar (jami ~2.95) yuzani oq chegaraga urardi. Endi jami
+       ~1.9 — naqsh o'qiladi, lekin sahna qorong'i bo'lib qolmaydi. */
+    warm:  {amb:0x9c8867, ai:0.34, hemi:0.50, key:0xffe2b8, ki:0.92, fill:0xffc890, fi:0.30, bg:0xf0e9da},
+    cold:  {amb:0x66788c, ai:0.34, hemi:0.47, key:0xd6ecff, ki:0.88, fill:0x9dbdd8, fi:0.30, bg:0xe8eef2},
+    studio:{amb:0xffffff, ai:0.30,hemi:0.44, key:0xffffff, ki:0.96, fill:0xffffff, fi:0.36, bg:0xf3f3ef},
+    dark:  {amb:0x24301f, ai:0.16, hemi:0.12, key:0xd8e0c0, ki:0.60, fill:0x445533, fi:0.16, bg:0x181e18}
+  }[preset] || {amb:0xffffff, ai:0.30, hemi:0.44, key:0xffffff, ki:0.92, fill:0xffffff, fi:0.34, bg:0xf3f3ef};
   T3.amb.color.setHex(cfg.amb);   T3.amb.intensity = cfg.ai;
   T3.hemi.intensity = cfg.hemi;
   T3.key.color.setHex(cfg.key);   T3.key.intensity = cfg.ki;
@@ -8621,6 +8792,20 @@ function init3D(){
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
   if(THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding; /* to'g'ri rang */
+  /* TONE MAPPING — naqshning yuzada o'qilishi uchun hal qiluvchi.
+     Ilgari toneMapping qo'yilmagandi (NoToneMapping): 1.0 dan oshgan
+     har qanday yorqinlik qattiq oq rangga KESILARDI. Yorug'lik jami
+     ~2.95 bo'lgani uchun sirlangan sopol yuzasining 70–87% i butunlay
+     oqqa aylanib, naqsh yo'qolardi (o'lchov: stakan 87.5%, ustun 83.7%).
+     ACES filmik egri chizig'i yuqori yorqinlikni silliq siqadi —
+     naqsh eng yorug' joyda ham ko'rinib turadi. */
+  if(THREE.ACESFilmicToneMapping !== undefined){
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15; /* ACES o'rta tonni pasaytiradi — qoplaymiz */
+  } else if(THREE.ReinhardToneMapping !== undefined){
+    renderer.toneMapping = THREE.ReinhardToneMapping;
+    renderer.toneMappingExposure = 1.4;
+  }
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   wrap.insertBefore(renderer.domElement, wrap.firstChild);
@@ -8707,14 +8892,19 @@ function init3D(){
   /* SIRLANGAN CHINNI materiali (glazur) */
   const MatClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
   const mat = new MatClass({side:THREE.DoubleSide, roughness:0.26, metalness:0.03});
-  if(mat.clearcoat !== undefined){ mat.clearcoat = 0.7; mat.clearcoatRoughness = 0.22; }
+  /* clearcoat 0.7 → 0.38: keng yoyilgan yaltiroq dog' naqsh ustiga
+     tushib, uni oq chegaraga surardi. 0.38 da sirlangan ko'rinish
+     saqlanadi, lekin naqsh dog' ostidan o'qiladi. */
+  if(mat.clearcoat !== undefined){ mat.clearcoat = 0.38; mat.clearcoatRoughness = 0.3; }
   mat.emissive = new THREE.Color(0xffffff);
-  mat.emissiveIntensity = 0.22; /* sopol o'z rangida "nafas oladi" — qoraymaydi */
+  /* 0.22 → 0.12: emissiv emissiveMap orqali naqshga bog'langan, lekin
+     0.22 da yorug' sohalarni kesilish chegarasidan o'tkazib yuborardi. */
+  mat.emissiveIntensity = 0.12; /* sopol o'z rangida "nafas oladi" — qoraymaydi */
   /* o'yma yog'och: naqsh teksturasi jigarrang tus bilan (ustun/peshtoq uchun) */
   const matWood = new MatClass({side:THREE.DoubleSide, roughness:0.55, metalness:0.02, color:0xb06a2f});
-  if(matWood.clearcoat !== undefined){ matWood.clearcoat = 0.3; matWood.clearcoatRoughness = 0.4; }
+  if(matWood.clearcoat !== undefined){ matWood.clearcoat = 0.2; matWood.clearcoatRoughness = 0.45; }
   matWood.emissive = new THREE.Color(0xb06a2f);
-  matWood.emissiveIntensity = 0.12;
+  matWood.emissiveIntensity = 0.07;
   const matStone = new THREE.MeshStandardMaterial({color:0xf1ede2, roughness:0.5, metalness:0.02});
   const matDark = new THREE.MeshStandardMaterial({color:0x151009, roughness:1});
   T3 = {scene, camera, renderer, group, mesh:null, mat, matWood, matStone, matDark, mats:[mat, matWood], archMats:[], amb, hemi, key, fill:fillL, auto:false, kind:'lagan', dust:{pts:dust,pos:dPos,spd:dSpd,n:DUST_N}, parX:0, parY:0, intro:null, ped, camLook:0, camEye:1.9, camDist:4.9};

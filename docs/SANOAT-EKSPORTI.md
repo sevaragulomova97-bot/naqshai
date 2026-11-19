@@ -552,3 +552,147 @@ ikki barobar oshiradi.
 
 Medalyon ko'rinishida soddalashtirish qo'llanmaydi — u yerda naqsh katta
 ko'riladi va to'liq boyligicha chiziladi.
+
+---
+
+# 2026-11-19 — 3D YUZADA NAQSH VA COMBO KOMPOZITSIYASI
+
+Ikki shikoyat bo'yicha tekshiruv: *"Combo qismi naqshlari mukammal
+bo'lmadi"* va *"3D qismida ham naqshlar yuzaga chiqilmayabdi"*.
+
+## 1. 3D: naqsh oq rangga yonib ketardi
+
+`WebGLRenderer` da **tone mapping qo'yilmagan edi** (`NoToneMapping`).
+Bu holatda 1.0 dan oshgan har qanday yorqinlik qattiq oq rangga
+**kesiladi**. Yorug'lik jami quvvati esa 2.95 edi (amb 0.5 + hemi 0.75 +
+key 1.25 + fill 0.45).
+
+Siluet bo'yicha o'lchov (buyum pikselllari fon bilan farqi > 26):
+
+| buyum | kesilgan piksel | o'rtacha yorqinlik |
+|---|---|---|
+| stakan girih | **87.5%** | 246 |
+| ustun girih | **83.7%** | 239 |
+| piyola girih | **80.8%** | 240 |
+| lagan girih | **70.7%** | 239 |
+| peshtoq gi | 12.6% | 147 |
+
+Ya'ni sirlangan sopol buyumlar yuzasining 70–87% i butunlay oq edi va
+naqsh o'sha oqning ostida yo'qolardi. Pol naqshi ham shu sababdan
+ko'rinmasdi.
+
+**Tuzatish:** ACES filmik tone mapping (`toneMappingExposure` 1.15) va
+yorug'lik quvvatini jami ~1.9 ga tushirish; glazur yaltiroqligi
+`clearcoat` 0.7 → 0.38; `emissiveIntensity` 0.22 → 0.12.
+
+**Natija (bir xil qurilmada A/B, to'g'ri fon qoidasi bilan):**
+
+| | tone mapping o'chiq | yoqiq |
+|---|---|---|
+| stakan kesilgan | 85.2% | **0%** |
+| stakan kontrast | 6.99 | **16.93** |
+| ustun kontrast | 23.67 | **37.99** |
+| lagan kontrast | 30.32 | **32.00** |
+
+Barcha 10 buyum × 5 naqsh uchun kesilish 0%, o'rtacha yorqinlik
+104–202 oralig'ida (qorong'i emas).
+
+### O'lchagichning o'zidagi ikki xato (yozib qo'yilsin)
+
+1. **Fon artefakti.** Dastlabki o'lchov markaziy 60% hududni olgandi.
+   Ustun ingichka bo'lgani uchun o'sha hududning ko'p qismi fon edi va
+   ustun kontrasti 2.35 chiqib, "eng yomon buyum" degan soxta xulosa
+   berdi. Siluet bo'yicha o'lchaganda u boshqa buyumlar bilan bir xil
+   darajada chiqdi.
+2. **"Oqqa yaqin = fon" qoidasi.** Stakan — oq sopol. Yonib ketgan
+   holatda uning yuzasi fon deb chiqarib tashlanib, kesilish 87.5%
+   o'rniga 3.4% ko'rsatdi. To'g'ri qoida — burchak piksel bilan farq.
+
+## 2. Combo: motiv katak SHAKLI bo'yicha tanlanadi
+
+Kataklarning haqiqiy taqsimoti o'lchandi:
+
+| naqsh | katak sinfi | soni | rin/u | cho'ziqlik |
+|---|---|---|---|---|
+| gi | r0 n16 | 121 | 0.354 | 1.41 |
+| gi | r1 n4 + r2 n5 | 541 | 0.14 | 1.33–1.41 |
+| xr | r0 n12 | 143 | 0.433 | **2.00** |
+| xr | r1 n6 | 240 | 0.433 | **1.15** |
+| sg | r0 n20 / r2 n10 | 11 | 0.21–0.48 | **3.1–3.2** |
+
+Motiv faqat katak **kattaligiga** qarab tanlanardi. Natijada:
+
+* **xatam-rumi:** cho'ziqligi 2.00 va 1.15 bo'lgan — butunlay boshqa
+  shakldagi — ikkala sinf ham bitta shartga tushib, **383 ta bir xil
+  6 bargli gul** chizilardi. Bu kompozitsiya emas, bir gulning oboysi.
+* **girih-islimiy:** 541 ta mayda katak chegaradan o'tolmay **bo'm-bo'sh**
+  qolardi — naqsh "teshiklarga qo'yilgan gullar" bo'lib ko'rinardi.
+* **shamsa-girih:** yulduz katakda `rin` (markazdan eng yaqin qirragacha)
+  katakning haqiqiy kattaligidan ancha kichik. Shu sababli ulkan
+  markaziy yulduz ichiga kichkina gul tushardi.
+
+**Tuzatishlar:**
+
+1. `cellInfo` ga **cho'ziqlik** (eng uzun diagonal / ichki diametr) va
+   **samarali radius** (yuza bo'yicha, yulduz nurlarini ham hisobga
+   oladi) qo'shildi.
+2. Motiv tanlash: mayda katak → kurtak; tor va cho'ziq → **bodom bargi**
+   (yangi `leafInCell`); keng va cho'ziq yulduz katak → **girih tugun**
+   ("girih ichida girih"); muntazam katak → shamsa.
+3. Gulbarg soni katakning tabiiy simmetriyasidan: 16 qirrali katakka
+   12 emas, **8** bargli shamsa.
+4. Bezak byudjeti rejimga bog'landi: tessellatsiyada 30 (kontur
+   portlashining oldini oladi), medalyonda 900.
+5. `gi` lentasi 0.70 ga ingichkalandi — **faqat medalyonda**. Buyum
+   yuzasida rapport o'nlab marta takrorlanadi va ingichka lenta
+   yo'qolib, naqsh "to'r"ga aylanadi.
+6. `sg` medalyoni: skelet radiusi 0.93 (tashqi yulduzlar halqasi
+   kesilmasin) va radial skelet ostiga medalyon zamini bo'yaladi.
+7. `budInCell` yo'nalishi koordinata boshidan emas, **katakning o'z
+   o'qidan** olinadi. Ilgari u kurtakning rapportdagi mutlaq o'rniga
+   bog'liq edi — ya'ni ko'chirishga nisbatan o'zgarmas emasdi.
+
+## 3. Chok: uchta soxta signal va bitta haqiqiy tuzatish
+
+`verifySeamless` chet farqini ichki farq bilan solishtiradi. Yuqori
+kontrastli naqshda chet farqi tabiiy ravishda katta bo'ladi, shuning
+uchun u **soxta signal** beradi. Tekshirish uchun adolatli sinov
+yozildi: o'ralish farqi (oxirgi qator ↔ birinchi qator) **o'sha
+joydagi** qo'shni qatorlar farqi bilan solishtiriladi.
+
+| holat | wrapX/locX | wrapY/locY | xulosa |
+|---|---|---|---|
+| xr p4 | 0.56 | 0.98 | chok yo'q |
+| gi p4 | 3.09 | 0.89 | chok yo'q (plitka cheti lenta chizig'iga tushgan) |
+| girih p4 | 0.60 | 0.63 | chok yo'q |
+| sierpinski p6 | 0.23 | 4.85 | diagonallar mos, chet qatorda naqshning o'z gorizontal elementi |
+
+`gi` da chok bo'lishi **mumkin emas**: rapport plitka kanvasining butun
+karralisi sifatida quriladi (186 = 93×2) va `createPattern` uni aynan
+takrorlaydi. 3× kattalashtirilgan ko'rikda chok chizig'i gulning
+markazidan o'tadi va gul butunlay uzluksiz.
+
+Yo'l-yo'lakay bitta haqiqiy aniqlik kiritildi: `picSeamlessTile` plitka
+kanvasini butun piksellarga yaxlitlardi (`Math.round(pw*dpr)`), lekin
+chizmani kasr davr (`pw`) koordinatasida tushirardi. Endi masshtab
+kanvas/davr nisbatidan olinadi — butun kanvas aynan bitta davrni
+ushlaydi.
+
+### Yana bir o'lchagich xatosi
+
+2×2 yoyma faqat **kenglik** bo'yicha chizilgandi. Xatam rapporti kvadrat
+emas (224×194), shuning uchun pastda bo'sh yo'lak qolib, soxta "chok"
+ko'rinardi. Bu meni `t666` to'rini ayblab, uni `t3636` ga
+almashtirishgacha olib borgan edi — keyin asl holiga qaytarildi.
+
+## 4. Yakuniy tekshiruv holati
+
+| test | holatlar | natija |
+|---|---|---|
+| Lazer kesish (`laser3`) | 82 | yiqilgan 0, osilgan uch 0 |
+| Chok (`chok`) | 164 | geometrik chok yo'q (2 ta soxta signal) |
+| Simmetriya | 164 | yiqilgan 0 |
+| Fayl formatlari | 7 | imzolar to'g'ri |
+| 3D buyumlar × naqshlar | 50 | kesilish 0%, JS xato 0 |
+
+Eng ko'p kontur: `gi` tile 100×100 — 15 782 (byudjetdan oldin 94 877).
