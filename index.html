@@ -844,6 +844,7 @@ pre.code{background:#0d2a21;color:#cfe6d8;border-radius:10px;padding:12px 14px;f
         <span class="dim-x">×</span>
         <label>bo'yi <input type="number" id="exp-mm-h" min="5" max="5000" step="1" value="100"> mm</label>
       </div>
+      <div id="laser-info" style="font-size:12px;color:var(--text-soft);margin-top:8px;line-height:1.5"></div>
     </div>
     <div class="opt-group" id="grp-size"><span>O'lcham (px)</span>
       <div class="seg" id="exp-size">
@@ -5181,7 +5182,21 @@ let LASER_INFO = null;         /* oxirgi eksport statistikasi (konsol uchun) */
    ustma-ust kesmalarni birlashtirish → mayda parchalarni olib tashlash.
    Oxirgi bosqich: qirqishdan qolgan 0.3 mm dan qisqa parchalar lazerda
    kesma emas, KUYGAN NUQTA beradi (kerf o'zi ~0.1–0.2 mm). */
+/* Natija KESHLANADI. Sabab: zich naqshlarda bu funksiya og'ir (o'lchov:
+   lissajous 100 mm da 7.96 s) va u bir necha joydan chaqiriladi —
+   eksport oynasidagi detal o'lchovi, DXF, EPS, SVG. Keshsiz foydalanuvchi
+   bitta yuklab olishda uni 2–3 marta kutardi.
+   Kalit — naqsh parametrlarining TO'LIQ nusxasi, shuning uchun biror
+   slayder qimirlasa kesh o'z-o'zidan chetlab o'tiladi. */
+const LASER_CACHE = [];
 function laserPolys(wMm, hMm, fill){
+  let ck = null;
+  try{
+    ck = JSON.stringify(P) + '|' + wMm + '|' + hMm + '|' + (fill || 'tile')
+       + '|' + (typeof TESS !== 'undefined' ? (TESS.group + ',' + TESS.cell) : '');
+    const hit = LASER_CACHE.find(e => e.k === ck);
+    if(hit) return hit.v;
+  }catch(e){ ck = null; }
   const B = boardFor(wMm, hMm);
   const board = { x0:0, y0:0, x1:B.bw, y1:B.bh };
   const polys = [];
@@ -5226,6 +5241,102 @@ function laserPolys(wMm, hMm, fill){
                  verts: countVerts(res),
                  vertsRaw: countVerts(merged),
                  epsMm: step.eps, segMm: step.seg };
+  if(ck){ LASER_CACHE.push({k:ck, v:res}); if(LASER_CACHE.length > 3) LASER_CACHE.shift(); }
+  return res;
+}
+
+/* ---------------------------------------------------------------------------
+   ENG MAYDA DETAL — LAZER UCHUN YAROQLILIK O'LCHOVI
+   ---------------------------------------------------------------------------
+   Lazer nuri material bo'ylab ~0.1–0.2 mm kenglikdagi yo'l (kerf) kuydirib
+   o'tadi. Agar IKKI ALOHIDA kesish yo'li bir-biridan kerfdan yaqin o'tsa,
+   orasidagi material butunlay yo'qoladi: nozik naqsh bitta qalin chiziqqa
+   aylanadi yoki detal teshilib ketadi.
+
+   Shuning uchun bu yerda eng kichik ORALIQ o'lchanadi. Hisobdan chiqariladi:
+     • bitta zanjirning o'z ichidagi yaqinlik — u bitta uzluksiz kesma;
+     • umumiy tuguni bor kesmalar — bu tutashuv;
+     • kesishuvchi kesmalar — girih lentalari bir-birini kesib o'tadi;
+     • 0.01 mm dan yaqin juftlar — tegib turibdi, oraliq emas.
+
+   O'lchangan natija (100 mm da): girih 3.11 mm, hankin8 4.75 mm —
+   bemalol kesiladi; islimiy, muqarnas, lissajous esa 0.01 mm — bu
+   o'lchamda ularni faqat O'YIB (gravyorka) bo'ladi, kesib emas.
+
+   Hisob og'ir bo'lmasligi uchun juftlar soni cheklangan: chegaraga
+   yetilsa natija "shu qismida" deb qaytariladi (exact=false). */
+const LASER_KERF_MM = 0.15;          /* odatdagi lazer kerfi */
+const FEATURE_CACHE = new Map();
+
+function minFeatureGap(wMm, hMm, fill, budget){
+  const key = P.type + '|' + wMm + '|' + hMm + '|' + (fill||'tile');
+  if(FEATURE_CACHE.has(key)) return FEATURE_CACHE.get(key);
+  budget = budget || 250000;
+  const B = boardFor(wMm, hMm), k = B.k;
+  let polys;
+  try{ polys = laserPolys(wMm, hMm, fill); }
+  catch(e){ console.warn('[lazer] detal o\'lchovi', e); return null; }
+  const SNAP = 0.05/k;
+  const nk = q => Math.round(q[0]/SNAP) + ',' + Math.round(q[1]/SNAP);
+  const segs = [];
+  polys.forEach((pl, pi)=>{
+    const pts = pl.closed ? pl.pts.concat([pl.pts[0]]) : pl.pts;
+    for(let i = 1; i < pts.length; i++) segs.push([pts[i-1], pts[i], nk(pts[i-1]), nk(pts[i]), pi]);
+  });
+  if(segs.length < 2){
+    const r = { gapMm:null, exact:true, konturlar:polys.length };
+    FEATURE_CACHE.set(key, r); return r;
+  }
+  const cell = Math.max(1e-6, 0.4/k);              /* 0.4 mm panjara */
+  const grid = new Map();
+  const put = (gk, v)=>{ let a = grid.get(gk); if(!a){ a = []; grid.set(gk, a); } a.push(v); };
+  segs.forEach((sg, si)=>{
+    const a = sg[0], b = sg[1];
+    const x0 = Math.floor(Math.min(a[0],b[0])/cell), x1 = Math.floor(Math.max(a[0],b[0])/cell);
+    const y0 = Math.floor(Math.min(a[1],b[1])/cell), y1 = Math.floor(Math.max(a[1],b[1])/cell);
+    for(let x = x0; x <= x1; x++) for(let y = y0; y <= y1; y++) put(x+','+y, si);
+  });
+  const cr = (o,a,b)=> (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+  const kesishadi = (p1,p2,p3,p4)=>{
+    const d1=cr(p3,p4,p1), d2=cr(p3,p4,p2), d3=cr(p1,p2,p3), d4=cr(p1,p2,p4);
+    return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+  };
+  const d2seg = (pt,a,b)=>{
+    const dx=b[0]-a[0], dy=b[1]-a[1], dd=dx*dx+dy*dy;
+    let t = dd>0 ? ((pt[0]-a[0])*dx + (pt[1]-a[1])*dy)/dd : 0;
+    t = t<0?0:t>1?1:t;
+    const ex = pt[0]-a[0]-dx*t, ey = pt[1]-a[1]-dy*t;
+    return ex*ex + ey*ey;
+  };
+  const FLOOR = (0.01/k)*(0.01/k);
+  /* Erta to'xtash: oraliq 0.02 mm dan kichik chiqdi — xulosa shundoq ham
+     "kesib bo'lmaydi". Qolgan juftlarni sanashning ma'nosi yo'q va zich
+     naqshlarda bu 9 soniyani 0.2 soniyaga tushiradi. */
+  const YETARLI = (0.02/k)*(0.02/k);
+  let best = Infinity, pairs = 0, exact = true;
+  const seen = new Set();
+  outer:
+  for(const list of grid.values()){
+    for(let i = 0; i < list.length; i++){
+      for(let j = i+1; j < list.length; j++){
+        const si = list[i], sj = list[j], A = segs[si], C = segs[sj];
+        if(A[4] === C[4]) continue;                                   /* bitta zanjir */
+        if(A[2]===C[2]||A[2]===C[3]||A[3]===C[2]||A[3]===C[3]) continue; /* tutashgan */
+        const pk = si < sj ? si+'_'+sj : sj+'_'+si;
+        if(seen.has(pk)) continue;
+        seen.add(pk);
+        if(++pairs > budget){ exact = false; break outer; }
+        if(kesishadi(A[0],A[1],C[0],C[1])) continue;                  /* kesishgan */
+        const d = Math.min(d2seg(A[0],C[0],C[1]), d2seg(A[1],C[0],C[1]),
+                           d2seg(C[0],A[0],A[1]), d2seg(C[1],A[0],A[1]));
+        if(d < FLOOR) continue;                                       /* tegib turibdi */
+        if(d < best){ best = d; if(best < YETARLI) break outer; }
+      }
+    }
+  }
+  const res = { gapMm: isFinite(best) ? +(Math.sqrt(best)*k).toFixed(3) : null,
+                exact, konturlar: polys.length, kesmalar: segs.length };
+  FEATURE_CACHE.set(key, res);
   return res;
 }
 
@@ -6119,6 +6230,7 @@ function expSyncGroups(){
   const dep = $('exp-jqdepth');
   if(dep) dep.style.opacity = (f === 'wif') ? '.45' : '1';
   expJqInfo();
+  expLaserInfo();
 }
 
 /* Rapport haqida jonli ma'lumot — nechta ilmoq, taxminiy mato o'lchami */
@@ -6138,6 +6250,50 @@ function expJqInfo(){
     (g.hex ? ' (geksagonal: balandlik ≈ c·√3)' : '') +
     '<br>~' + (W/dens*25.4).toFixed(0) + ' × ' + (H/dens*25.4).toFixed(0) + ' mm (100 ilmoq/dyuym zichlikda)' +
     (EXP.format === 'wif' ? '<br>WIF — ramka/pedal soni fayl yaratilganda hisoblanadi.' : '');
+}
+
+/* LAZER UCHUN YAROQLILIK — eksport oynasida jonli ko'rsatkich.
+   Foydalanuvchi ustaxonaga borishdan OLDIN bilishi kerak bo'lgan yagona
+   raqam: shu o'lchamda naqshning eng mayda detali necha mm. Kerfdan
+   kichik bo'lsa, lazer uni kesib bera olmaydi. */
+let laserInfoTimer = 0;
+function expLaserInfo(){
+  const el = $('laser-info');
+  if(!el) return;
+  const isVector = (EXP.format === 'svg' || EXP.format === 'dxf' || EXP.format === 'eps');
+  if(!isVector){ el.textContent = ''; return; }
+  el.innerHTML = '<span style="opacity:.6">detal o\'lchami hisoblanmoqda…</span>';
+  clearTimeout(laserInfoTimer);
+  laserInfoTimer = setTimeout(()=>{
+    const w = Math.max(5, parseInt(($('exp-mm-w')||{}).value, 10) || EXP.mm || 100);
+    const h = Math.max(5, parseInt(($('exp-mm-h')||{}).value, 10) || w);
+    let r = null;
+    try{ r = minFeatureGap(w, h, EXP.fill); }catch(e){ console.warn('[lazer] info', e); }
+    if(!r){ el.innerHTML = '<span style="opacity:.6">o\'lchab bo\'lmadi</span>'; return; }
+    const K = LASER_KERF_MM;
+    let bosh, rang, izoh;
+    if(r.gapMm === null){
+      bosh = 'Naqsh chiziqlari bir-biridan uzoq';
+      rang = '#2f7d4f';
+      izoh = 'Kesishga yaroqli.';
+    } else if(r.gapMm >= K){
+      bosh = 'Eng mayda detal: <b>' + r.gapMm.toFixed(2) + ' mm</b>';
+      rang = '#2f7d4f';
+      izoh = 'Lazer kerfidan (~' + K + ' mm) keng — <b>kesishga yaroqli</b>.';
+    } else {
+      const kerak = Math.ceil(w*K/r.gapMm/10)*10;
+      bosh = 'Eng mayda detal: <b>' + r.gapMm.toFixed(2) + ' mm</b>';
+      rang = '#b06a1f';
+      izoh = 'Lazer kerfi ~' + K + ' mm — bu detalni kesib bera olmaydi, '
+           + 'chiziqlar bir-biriga qo\'shilib ketadi.<br>'
+           + '→ <b>O\'yish (gravyorka)</b> uchun bemalol ishlatsa bo\'ladi.<br>'
+           + '→ Kesish kerak bo\'lsa, eni <b>' + (kerak > 5000 ? '5000+' : kerak) + ' mm</b> dan '
+           + 'kichik bo\'lmasin yoki soddaroq naqsh tanlang.';
+    }
+    el.innerHTML = '<span style="color:' + rang + '">' + bosh + '</span><br>' + izoh
+      + '<br><span style="opacity:.55">' + r.konturlar + ' ta kontur'
+      + (r.exact ? '' : ' · tekshirilgan qismi bo\'yicha') + '</span>';
+  }, 60);
 }
 
 function segWire(id, key, isNum){
@@ -6304,9 +6460,39 @@ let threeReady = false;
 let T3 = null; /* {scene,camera,renderer,group,mesh,mat,amb,hemi,key,fill,auto,kind} */
 const PH = { img:null, shape:'doira', size:45, frame:12, text:'', date:'' };
 
+/* V KOORDINATASINI YOY UZUNLIGI BO'YICHA QAYTA PARAMETRLASH.
+   three.js LatheGeometry da v = nuqta INDEKSI / (nuqtalar−1). Profil
+   nuqtalari teng oraliqda bo'lmagani uchun (og'iz burmasi, tubi burchagi
+   zich, devor siyrak) naqsh zich joyda vertikal SIQILADI, siyrak joyda
+   CHO'ZILADI. O'lchov: tuvakda anizotropiya bir xil buyum ichida 1.28 dan
+   4.99 gacha sakrardi va bu ko'zga aniq tashlanardi.
+   Yoy uzunligiga o'tkazilgach naqsh butun profil bo'ylab bir tekis yotadi. */
+function arcLengthUV(geo, profile, scale){
+  const uv = geo.attributes && geo.attributes.uv;
+  const pos = geo.attributes && geo.attributes.position;
+  if(!uv || !pos || profile.length < 2) return geo;
+  const s = [0];
+  for(let i = 1; i < profile.length; i++){
+    s.push(s[i-1] + Math.hypot((profile[i][0]-profile[i-1][0])*scale,
+                               (profile[i][1]-profile[i-1][1])*scale));
+  }
+  const tot = s[s.length-1];
+  if(!(tot > 1e-9)) return geo;
+  const N = profile.length - 1;
+  for(let i = 0; i < uv.count; i++){
+    const v = uv.getY(i);                 /* 0..1, indeks bo'yicha */
+    const f = v*N;                        /* kasrli indeks */
+    const j = Math.min(N-1, Math.max(0, Math.floor(f)));
+    const t = f - j;
+    uv.setY(i, (s[j] + (s[j+1]-s[j])*t)/tot);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
 function latheFromProfile(profile, scale){
   const pts = profile.map(q=>new THREE.Vector2(q[0]*scale, q[1]*scale));
-  return new THREE.LatheGeometry(pts, 96);
+  const g = new THREE.LatheGeometry(pts, 96);
+  return arcLengthUV(g, profile, scale);
 }
 /* PLANAR UV — tepadan proyeksiya: naqsh idish markazida SIMMETRIK yotadi
    (LatheGeometry ning standart UV si teksturani aylana bo'ylab cho'zib yuboradi) */
@@ -7069,6 +7255,57 @@ function vSpanOf(geo){
   return L > 1e-4 ? L : null;
 }
 
+/* MAYDON BO'YICHA GEOMETRIK O'RTACHA RADIUS (y o'qidan).
+   Radiusi o'zgaruvchan aylanma yuzada (ko'za, shar, piyola) naqsh
+   gorizontal qadami r ga proporsional: 2πr/nu. Qaysi r olinsa ham,
+   boshqa joylarda cho'zilish qoladi — savol faqat uni QANDAY taqsimlashda.
+   Cho'zilishning logarifmik xatosi ∫|log(r/r₀)|²dA minimal bo'ladigan r₀ —
+   bu aynan log r ning maydon bo'yicha o'rtachasi, ya'ni GEOMETRIK o'rtacha.
+   O'lchov: eng katta radius bilan tuvakda anizotropiya 2.81, oddiy
+   o'rtacha bilan sharda 5.66 bo'lardi; geometrik o'rtacha ikkalasini ham
+   1.5 atrofida ushlaydi. */
+function meanLogRadiusOf(geo){
+  const pos = geo.attributes && geo.attributes.position;
+  if(!pos) return null;
+  const idx = geo.index;
+  const n = idx ? idx.count : pos.count;
+  let A = 0, S = 0;
+  const g=(i)=>[pos.getX(i), pos.getY(i), pos.getZ(i)];
+  for(let i = 0; i + 2 < n; i += 3){
+    const a=g(idx?idx.getX(i):i), b=g(idx?idx.getX(i+1):i+1), c=g(idx?idx.getX(i+2):i+2);
+    const e1=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], e2=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+    const cr=[e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]];
+    const ar = 0.5*Math.hypot(cr[0],cr[1],cr[2]);
+    if(!(ar > 1e-12)) continue;
+    const rx=(a[0]+b[0]+c[0])/3, rz=(a[2]+b[2]+c[2])/3;
+    const r = Math.hypot(rx, rz);
+    if(!(r > 1e-6)) continue;                 /* o'q ustidagi uchburchak */
+    A += ar; S += ar*Math.log(r);
+  }
+  return A > 1e-9 ? Math.exp(S/A) : null;
+}
+
+/* Yuzaning haqiqiy YUZA MAYDONI (dunyo birligida, kvadrat). */
+function surfaceAreaOf(geo){
+  const pos = geo.attributes && geo.attributes.position;
+  if(!pos) return null;
+  const idx = geo.index;
+  const n = idx ? idx.count : pos.count;
+  const ax=[0,0,0], bx=[0,0,0], cx=[0,0,0];
+  let A = 0;
+  const get=(i,o)=>{ o[0]=pos.getX(i); o[1]=pos.getY(i); o[2]=pos.getZ(i); };
+  for(let i = 0; i + 2 < n; i += 3){
+    get(idx?idx.getX(i)  :i,   ax);
+    get(idx?idx.getX(i+1):i+1, bx);
+    get(idx?idx.getX(i+2):i+2, cx);
+    const e1=[bx[0]-ax[0], bx[1]-ax[1], bx[2]-ax[2]];
+    const e2=[cx[0]-ax[0], cx[1]-ax[1], cx[2]-ax[2]];
+    const c=[e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]];
+    A += 0.5*Math.hypot(c[0], c[1], c[2]);
+  }
+  return A > 1e-9 ? A : null;
+}
+
 function tileRepeatFor(kind, geo){
   if(!geo) return [1, 1];
   if(!geo.boundingBox) geo.computeBoundingBox();
@@ -7078,11 +7315,23 @@ function tileRepeatFor(kind, geo){
   const iv = v => Math.max(1, Math.round(v));
   if(kind === 'panel')  return [iv(sx/TILE3D), iv(sy/vTile)];
   if(kind === 'lagan')  return [iv(sx/TILE3D), iv(sz/vTile)];
-  /* aylanma yuzalar: u — aylana bo'ylab (BUTUN son SHART, aks holda buyum
-     orqasida ulanish chizig'i chiqadi), v — profil uzunligi bo'ylab */
-  const R = Math.max(sx, sz)/2;
+  /* AYLANMA YUZALAR.
+     u — aylana bo'ylab (BUTUN son SHART, aks holda buyum orqasida
+     ulanish chizig'i chiqadi), v — profil uzunligi bo'ylab.
+
+     Ilgari u uchun ENG KATTA radius olinardi (R = max(sx,sz)/2). Radiusi
+     o'zgaruvchan buyumlarda — tuvak, ko'za, shar — bu xato beradi: eng
+     keng joy og'izda bo'lsa, tana radiusi undan ancha kichik va o'sha
+     yerda naqsh gorizontal siqilib qoladi. O'lchov: tuvakda naqsh 2.8
+     barobar cho'zilgan ko'rinardi (anizotropiya 2.81).
+
+     To'g'ri qiymat — O'RTACHA aylana uzunligi. U yuza maydonidan
+     chiqadi: A = ∫2πr·dl  →  o'rtachaAylana = A / vLen. Shunda naqsh
+     butun yuza bo'ylab o'rtacha nolga yaqin buzilish bilan yotadi. */
   const vLen = vSpanOf(geo) || sy;
-  return [Math.max(3, Math.round(TAU*R/TILE3D)), iv(vLen/vTile)];
+  const rG = meanLogRadiusOf(geo);
+  const circ = rG ? TAU*rG : TAU*Math.max(sx, sz)/2;
+  return [Math.max(3, Math.round(circ/TILE3D)), iv(vLen/vTile)];
 }
 
 function makePatternTexture(){
@@ -9076,6 +9325,7 @@ function wireUI(){
       const a = $(aId), c = $(bId);
       if(a){ a.value = v; delete a.dataset.touched; }
       if(c){ c.value = v; delete c.dataset.touched; }
+      if(segId === 'exp-mm') expLaserInfo();   /* o'lcham o'zgardi — detal o'lchovi qayta */
     });
   };
   linkSeg('exp-mm',     'exp-mm-w', 'exp-mm-h');
@@ -9087,6 +9337,7 @@ function wireUI(){
     for(const id of inputIds){
       const el = $(id); if(!el) continue;
       el.addEventListener('input', ()=>{
+        if(id === 'exp-mm-w' || id === 'exp-mm-h') expLaserInfo();
         el.dataset.touched = '1';
         const box = $(segId); if(!box) return;
         const a = $(inputIds[0]), b = inputIds[1] ? $(inputIds[1]) : null;
