@@ -7184,19 +7184,111 @@ function buildArch(kind){
   const g = kind === 'ustun'   ? buildUstun()
           : kind === 'darvoza' ? buildDarvoza()
           :                      buildPeshtoq();
-  /* KAFOLAT: o'raladigan yuzalarda (Cylinder / Lathe / Sphere / Torus) naqsh
-     aylana bo'ylab BUTUN son marta takrorlanishi SHART — aks holda buyum
-     orqasida ulanish chizig'i chiqadi. Qism qurayotganda bu oson unutiladi
-     (guldasta boshidagi halqalarda 8.33 chiqib qolgandi), shuning uchun
-     tekshiruv geometriya turi ma'lum bo'lgan yagona joyda — shu yerda —
-     markazlashtirilgan. */
+  /* NAQSH ZICHLIGI GEOMETRIYADAN HISOBLANADI.
+     Ilgari har qism uchun takrorlanish soni QO'LDA yozilardi
+     (archMat('tile', 6, 1, ...) kabi). Qism qo'shilgani sari bu qiymatlar
+     bir-biriga mos kelmay qolgan: o'lchovda peshtoqda naqsh fizik o'lchami
+     qismlar orasida 26 BAROBAR farq qilardi (0.001–0.026), muqarnas
+     qovurg'alarida esa naqsh 6 barobar, halqalarda 10–17 barobar
+     cho'zilgandi. Ko'zga bu "naqsh buzilgan, uzilishlar bor" bo'lib
+     ko'rinardi.
+
+     Endi har mesh uchun UV→dunyo akslantirishining haqiqiy masshtabi
+     o'lchanadi (|dP/du| va |dP/dv|) va takrorlanish soni shundan chiqadi:
+         rep_u = |dP/du| / TU ,   rep_v = |dP/dv| / (TU·TILE_AR)
+     Shunda naqshning FIZIK o'lchami butun inshoot bo'ylab bir xil bo'ladi
+     va cho'zilish yo'qoladi. Usul ikkala UV an'anasiga ham birdek ishlaydi:
+     Extrude da UV = dunyo koordinatasi (|dP/du| = 1), Cylinder/Box da
+     UV = 0..1 (|dP/du| = yuza kengligi).
+
+     O'raladigan yuzalarda (Cylinder / Lathe / Sphere / Torus) rep_u BUTUN
+     songa yaxlitlanadi — aks holda buyum orqasida ulanish chizig'i chiqadi.
+
+     Bitta material bir nechta meshda ishlatilishi mumkin (masalan muqarnas
+     kataklari), shuning uchun qiymatlar material bo'yicha yig'ilib,
+     MEDIANASI olinadi. */
+  const mScale = new Map();                 /* material.uuid -> [Lu…], [Lv…], wrap */
+  const V0 = new THREE.Vector3(), V1 = new THREE.Vector3(), V2 = new THREE.Vector3();
   g.traverse(o=>{
     if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; }
-    if(!o.isMesh || !o.material || !o.material.userData || !o.material.userData.rep) return;
-    if(!/Cylinder|Lathe|Sphere|Torus/.test((o.geometry && o.geometry.type) || '')) return;
-    const r = o.material.userData.rep;
-    r[0] = Math.max(1, Math.round(r[0]));
+    const mat = o.isMesh && o.material;
+    if(!mat || !mat.userData || !mat.userData.rep) return;
+    const geo = o.geometry;
+    const pos = geo && geo.attributes && geo.attributes.position;
+    const uv  = geo && geo.attributes && geo.attributes.uv;
+    if(!pos || !uv) return;
+    const idx = geo.index, n = idx ? idx.count : pos.count;
+    const Lu = [], Lv = [];
+    /* O'raladigan yuzalarda (silindr, lathe) QOPQOQ uchburchaklari
+       hisobga olinmaydi. Ularning UV si butunlay boshqa (markazdan
+       tarqaluvchi disk), shuning uchun medianani buzadi: o'lchovda
+       ustun silindrida anizotropiya 1 o'rniga 3.7, nozik halqalarda
+       esa 84 gacha chiqib ketgandi. Yon yuza normali Y o'qiga deyarli
+       perpendikulyar bo'ladi — shu bilan ajratiladi. */
+    const wrapGeo = /Cylinder|Lathe|Sphere|Torus/.test((geo && geo.type) || '');
+    const stride = Math.max(3, Math.floor(n/3/120)*3);  /* ~120 uchburchak */
+    for(let i = 0; i + 2 < n; i += stride){
+      const a = idx?idx.getX(i):i, b = idx?idx.getX(i+1):i+1, c = idx?idx.getX(i+2):i+2;
+      V0.set(pos.getX(a), pos.getY(a), pos.getZ(a));
+      V1.set(pos.getX(b), pos.getY(b), pos.getZ(b));
+      V2.set(pos.getX(c), pos.getY(c), pos.getZ(c));
+      const du1 = uv.getX(b)-uv.getX(a), dv1 = uv.getY(b)-uv.getY(a);
+      const du2 = uv.getX(c)-uv.getX(a), dv2 = uv.getY(c)-uv.getY(a);
+      const det = du1*dv2 - du2*dv1;
+      if(Math.abs(det) < 1e-12) continue;
+      const e1x=V1.x-V0.x, e1y=V1.y-V0.y, e1z=V1.z-V0.z;
+      const e2x=V2.x-V0.x, e2y=V2.y-V0.y, e2z=V2.z-V0.z;
+      if(wrapGeo){
+        const nx=e1y*e2z-e1z*e2y, ny=e1z*e2x-e1x*e2z, nz=e1x*e2y-e1y*e2x;
+        const nl=Math.hypot(nx,ny,nz);
+        if(nl>1e-9 && Math.abs(ny/nl)>0.7) continue;    /* qopqoq — tashlab ketamiz */
+      }
+      const tux=(e1x*dv2-e2x*dv1)/det, tuy=(e1y*dv2-e2y*dv1)/det, tuz=(e1z*dv2-e2z*dv1)/det;
+      const tvx=(e2x*du1-e1x*du2)/det, tvy=(e2y*du1-e1y*du2)/det, tvz=(e2z*du1-e1z*du2)/det;
+      const lu = Math.hypot(tux,tuy,tuz), lv = Math.hypot(tvx,tvy,tvz);
+      if(lu > 1e-6 && isFinite(lu)) Lu.push(lu);
+      if(lv > 1e-6 && isFinite(lv)) Lv.push(lv);
+    }
+    if(!Lu.length || !Lv.length) return;
+    const med = arr => { const a = arr.slice().sort((x,y)=>x-y); return a[a.length>>1]; };
+    let e = mScale.get(mat.uuid);
+    if(!e){ e = { mat, items:[] }; mScale.set(mat.uuid, e); }
+    e.items.push({ mesh:o, Lu:med(Lu), Lv:med(Lv), wrap: wrapGeo });
   });
+  /* BITTA MATERIAL — TURLI GEOMETRIYA.
+     Masalan muqarnas javonlari (nozik halqa) va qovurg'alari (ravoq bandi)
+     bir xil materialdan foydalanadi. Ularning UV masshtabi butunlay boshqa,
+     shuning uchun bitta o'rtacha qiymat ikkalasiga ham to'g'ri kelmaydi:
+     o'lchovda halqalarda anizotropiya 84 gacha chiqdi. Masshtabi keskin
+     farq qilgan guruhlarga material NUSXASI beriladi (tekstura rasmi
+     xotirada baham ko'riladi, faqat repeat boshqacha). */
+  const vUnit = TU*(TILE_AR || 1);
+  const repOf = it => {
+    let ru = it.Lu/TU, rv = it.Lv/vUnit;
+    ru = it.wrap ? Math.max(1, Math.round(ru)) : Math.max(0.05, ru);
+    return [ru, Math.max(0.05, rv)];
+  };
+  for(const e of mScale.values()){
+    /* guruhlash: rep qiymati 1.6 barobardan ko'p farq qilsa — alohida */
+    const groups = [];
+    for(const it of e.items){
+      const r = repOf(it);
+      let g2 = groups.find(q => Math.max(q.r[0]/r[0], r[0]/q.r[0]) < 1.6 &&
+                                Math.max(q.r[1]/r[1], r[1]/q.r[1]) < 1.6);
+      if(g2){ g2.items.push(it); g2.reps.push(r); }
+      else groups.push({ r, items:[it], reps:[r] });
+    }
+    groups.sort((a,b)=> b.items.length - a.items.length);   /* kattasi asl materialni oladi */
+    groups.forEach((grp, gi)=>{
+      const med = k => { const a = grp.reps.map(r=>r[k]).sort((x,y)=>x-y); return a[a.length>>1]; };
+      const rep = [med(0), med(1)];
+      if(gi === 0){ e.mat.userData.rep = rep; return; }
+      const cl = e.mat.clone();
+      cl.userData = Object.assign({}, e.mat.userData, { rep });
+      if(T3 && T3.archMats) T3.archMats.push(cl);
+      for(const it of grp.items) it.mesh.material = cl;
+    });
+  }
   g.position.y = FLOOR_Y;
   return g;
 }
