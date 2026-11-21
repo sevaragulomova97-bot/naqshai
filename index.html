@@ -7467,7 +7467,7 @@ const ARCH_KINDS = {ustun:1, darvoza:1, peshtoq:1};
 const FLOOR_Y = -1.66;
 const TU = 0.40;                     /* asosiy maydon plitkasi (dunyo birligi) */
 
-function archMat(kind, rx, ry, tint){
+function archMat(kind, rx, ry, tint, bandFit){
   let m;
   if(kind === 'stone'){
     m = new THREE.MeshStandardMaterial({color:0xd6c7a4, roughness:0.86, metalness:0.02});
@@ -7488,6 +7488,15 @@ function archMat(kind, rx, ry, tint){
       if(m.emissive){ m.emissive = new THREE.Color(tint); m.emissiveIntensity = 0.05; }
     }
     m.userData.rep = [rx || 1, (ry === undefined ? rx : ry) || 1];
+    /* bandFit — LENTAGA ATAYLAB MOSLANGAN o'lcham.
+       Hoshiya, archivolt va ravoq qovurg'alari tor lentalar: ularga
+       "aynan bitta plitka yotsin" deb 1/lenta_eni berilgan. buildArch
+       dagi umumiy normalizatsiya bu qiymatlarni ustidan yozib yuborardi
+       va lentaga global teksel (2.5) tushardi — natijada tor yo'lakka
+       naqshning atigi 12% i cho'zilib, gul va yulduzlar tilim-tilim
+       kesilardi. Bu bayroq qo'yilgan material normalizatsiyadan
+       chetlab o'tiladi. */
+    if(bandFit) m.userData.bandFit = true;
     T3.archMats.push(m);
   }
   return m;
@@ -7907,7 +7916,7 @@ function buildDarvoza(){
   const archv = new THREE.Mesh(
     new THREE.ExtrudeGeometry(archBandShape(ow, oh, apexY, 0.16),
                               {depth:0.06, bevelEnabled:false, curveSegments:20}),
-    archMat('tile', 1/0.16, 1/0.16, 0xc99b3f));
+    archMat('tile', 1/0.16, 1/0.16, 0xc99b3f, true));
   archv.position.z = 0.004; g.add(archv);
 
   /* soffit — ichkarida yorug'lik kam */
@@ -8015,7 +8024,7 @@ function buildPeshtoq(){
   outer.holes.push(cut);
   const hoshiya = new THREE.Mesh(
     new THREE.ExtrudeGeometry(outer, {depth:D + 0.10, bevelEnabled:false}),
-    archMat('tile', 1/band, 1/band, 0x24518f));
+    archMat('tile', 1/band, 1/band, 0x24518f, true));
   hoshiya.position.z = -D; g.add(hoshiya);
   /* hoshiya chetidagi ingichka oq gardish */
   for(const [w2, h2, z2] of [[W, H, -D + D + 0.105]]){
@@ -8027,7 +8036,7 @@ function buildPeshtoq(){
   const archv = new THREE.Mesh(
     new THREE.ExtrudeGeometry(archBandShape(ow, spring, apex, 0.20),
                               {depth:0.07, bevelEnabled:false, curveSegments:20}),
-    archMat('tile', 1/0.20, 1/0.20, 0xc99b3f));
+    archMat('tile', 1/0.20, 1/0.20, 0xc99b3f, true));
   archv.position.z = 0.005; g.add(archv);
 
   /* 4) ayvon ichki yuzalari — yorug'lik kam, to'qroq tus */
@@ -8056,8 +8065,8 @@ function buildPeshtoq(){
 
   /* 5) ravoq boshi — ichma-ich chekinuvchi qovurg'alar + yelkada muqarnas */
   const ribs = archRibs(ow*0.99, spring, apex, 5, -D - 0.02, -0.19,
-                        archMat('tile', 1/0.13, 1/0.13, 0xbf9648),
-                        archMat('tile', 1/0.13, 1/0.13, 0x2f639f));
+                        archMat('tile', 1/0.13, 1/0.13, 0xbf9648, true),
+                        archMat('tile', 1/0.13, 1/0.13, 0x2f639f, true));
   g.add(ribs);
   /* Yelka muqarnasi ayvon YON DEVORLARIDA — ilgari u ochiq joyni kesib
      o'tuvchi tokchadek ko'rinardi. */
@@ -8146,6 +8155,7 @@ function buildArch(kind){
     if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; }
     const mat = o.isMesh && o.material;
     if(!mat || !mat.userData || !mat.userData.rep) return;
+    if(mat.userData.bandFit) return;        /* lentaga moslangan — tegilmaydi */
     const geo = o.geometry;
     const pos = geo && geo.attributes && geo.attributes.position;
     const uv  = geo && geo.attributes && geo.attributes.uv;
@@ -8184,9 +8194,21 @@ function buildArch(kind){
     }
     if(!Lu.length || !Lv.length) return;
     const med = arr => { const a = arr.slice().sort((x,y)=>x-y); return a[a.length>>1]; };
+    /* UV QAMROVI. Yuzaga tushadigan HAQIQIY takror soni = UV kengligi ×
+       repeat. Extrude geometriyada UV dunyo koordinatasi bo'lgani uchun
+       repeat birlik uzunlikka tegishli; tor lentada UV kengligi 0.1 ga
+       teng bo'lsa, repeat 2.5 bo'lsa ham yuzaga atigi 0.27 takror
+       tushadi — ya'ni naqshning chorak bo'lagi cho'ziladi va motivlar
+       kesiladi. Shuning uchun UV qamrovi ham o'lchanadi. */
+    let u0=Infinity,u1=-Infinity,v0=Infinity,v1=-Infinity;
+    for(let i=0;i<uv.count;i++){
+      const uu=uv.getX(i), vv=uv.getY(i);
+      if(uu<u0)u0=uu; if(uu>u1)u1=uu; if(vv<v0)v0=vv; if(vv>v1)v1=vv;
+    }
     let e = mScale.get(mat.uuid);
     if(!e){ e = { mat, items:[] }; mScale.set(mat.uuid, e); }
-    e.items.push({ mesh:o, Lu:med(Lu), Lv:med(Lv), wrap: wrapGeo });
+    e.items.push({ mesh:o, Lu:med(Lu), Lv:med(Lv), wrap: wrapGeo,
+                   du: Math.max(1e-6, u1-u0), dv: Math.max(1e-6, v1-v0) });
   });
   /* BITTA MATERIAL — TURLI GEOMETRIYA.
      Masalan muqarnas javonlari (nozik halqa) va qovurg'alari (ravoq bandi)
@@ -8198,8 +8220,40 @@ function buildArch(kind){
   const vUnit = TU*(TILE_AR || 1);
   const repOf = it => {
     let ru = it.Lu/TU, rv = it.Lv/vUnit;
+    const du = it.du || 1, dv = it.dv || 1;
     ru = it.wrap ? Math.max(1, Math.round(ru)) : Math.max(0.05, ru);
-    return [ru, Math.max(0.05, rv)];
+    rv = Math.max(0.05, rv);
+    /* TOR YUZADA NAQSH KESILMASIN.
+       Yuzaga tushadigan haqiqiy takror soni nU = UV kengligi × repeat.
+       U birdan kichik bo'lsa, yuzaga naqshning faqat BIR BO'LAGI
+       tushadi va motivlar o'rtasidan kesiladi — peshtoq ravog'ining
+       tor lentalarida va kapitel muqarnasining mayda kataklarida
+       aynan shu ko'rinardi (o'lchovda nU = 0.27, ya'ni naqshning
+       chorak bo'lagi). Foydalanuvchi buni "obyektga joylashishda
+       uzilishlar" deb ko'rsatgan.
+       Haqiqiy koshinkorlikda tor lenta MAYDAROQ, lekin BUTUN motivli
+       hoshiya naqshi bilan bezatiladi. Shuning uchun eng tor yo'nalish
+       aynan bitta to'liq takrorga keltiriladi, ikkinchisi esa butun
+       songa yaxlitlanadi — shunda yuzada faqat butun motivlar yotadi. */
+    let nU = du*ru, nV = dv*rv;
+    if(nU < 0.995 || nV < 0.995){
+      const k = Math.min(nU, nV);
+      const asp = Math.max(nU, nV)/Math.max(1e-9, k);
+      if(asp <= 6 && k > 1e-9){
+        /* nisbat saqlanadi — naqsh cho'zilmaydi */
+        nU = Math.max(1, Math.round(nU/k));
+        nV = Math.max(1, Math.round(nV/k));
+      } else {
+        /* juda cho'ziq yuza (nozik gardish, ingichka halqa): nisbatni
+           saqlash naqshni ko'zga ko'rinmas darajada maydalab yuborardi,
+           shuning uchun faqat tor yo'nalish bittaga keltiriladi. */
+        nU = Math.max(1, Math.round(nU));
+        nV = Math.max(1, Math.round(nV));
+      }
+      ru = nU/du; rv = nV/dv;
+    }
+    if(it.wrap) ru = Math.max(1, Math.round(ru));
+    return [ru, rv];
   };
   for(const e of mScale.values()){
     /* guruhlash: rep qiymati 1.6 barobardan ko'p farq qilsa — alohida */
