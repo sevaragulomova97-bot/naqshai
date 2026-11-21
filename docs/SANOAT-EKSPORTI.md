@@ -696,3 +696,70 @@ almashtirishgacha olib borgan edi — keyin asl holiga qaytarildi.
 | 3D buyumlar × naqshlar | 50 | kesilish 0%, JS xato 0 |
 
 Eng ko'p kontur: `gi` tile 100×100 — 15 782 (byudjetdan oldin 94 877).
+
+---
+
+# 2026-11-21 — MUQARNAS + ISLIMIY
+
+Combo bo'limining to'rtinchi naqshi `mi` o'z skeletida chiziladi
+(`drawMuqarnasIslimiy`), shuning uchun oldingi combo tuzatishlari unga
+tegmagan edi.
+
+## 1. Toq simmetriyada rang uzilishi
+
+Tokchalar soni `m = sym + 2·yarus`, ranglar esa `i%2` bilan almashardi.
+Simmetriya toq bo'lganda m ham toq chiqadi va halqa yopilganda ikkita
+bir xil rangli tokcha yonma-yon tushadi.
+
+| sym | yaruslardagi tokchalar soni | toq yaruslar |
+|---|---|---|
+| 6 | 6, 8, 10, 12, 14 | 0 |
+| 7 | 7, 9, 11, 13, 15 | **5** |
+| 8 | 8, 10, 12, 14, 16 | 0 |
+| 9 | 9, 11, 13, 15, 17 | **5** |
+| 10 | 10, 12, 14, 16, 18 | 0 |
+
+Ya'ni toq simmetriyada **beshala yarusda ham** uzilish bor edi, va u
+12 soat yo'nalishida ko'rinardi.
+
+**Tuzatish:** toq sonda almashinuv tokchalar bo'yicha emas, yaruslar
+bo'yicha olinadi. n burchakli simmetriya aynan saqlanadi va rang
+uzilmaydi. Haqiqiy muqarnasda ikkala usul ham uchraydi.
+
+## 2. Yarus yuzasi bo'yalmasdi
+
+Faqat tokcha og'zi bilan yarus doirasi orasidagi ingichka yarim oy
+bo'yalardi, yarusning qolgan qismi (`rN`..og'iz) oq qolardi. Natijada
+naqsh gumbaz yuzasi emas, **oq fon ustidagi rangli yarim oylar** bo'lib
+ko'rinardi.
+
+**Tuzatish:** `rN..r` halqasi to'liq bo'yaladi va har tokchaga
+**yoritilgan lab** — og'iz chizig'i bo'ylab ingichka ochroq tasma —
+qo'shiladi, shundan o'yilganlik seziladi.
+
+Ikki texnik cheklov:
+
+* Halqa `ctx.arc()` bilan chiziladi, `circle()` bilan **emas**:
+  `circle()` tessellatsiyada (`NORING` qo'yilganda) ataylab hech narsa
+  chizmaydi, shuning uchun halqa 3D yuzasida va Jakkard eksportida
+  yo'qolib qolardi. Bu tuzoqqa bu loyihada ilgari tushilgan.
+* Chuqurlik **gradient bilan emas**, ikki tekis ton bilan beriladi:
+  DXF va EPS eksportlari faqat tekis to'ldirishni qo'llaydi.
+
+## 3. Sinalgan va rad etilgan yo'l
+
+Avval kataklarni og'iz chizig'idan **markazgacha** to'ldirib, ichki
+yaruslarni ustidan chizish sinaldi (gumbaz aslida shunday taxlanadi).
+Bu yuzani to'liq qoplaydi, lekin natija muqarnas emas, **baliq
+tangachalari** bo'lib chiqdi va barglar ichki yaruslar ostida qolib
+ketdi. Asl joylashuvga qaytarildi.
+
+## 4. Tekshiruv
+
+| test | natija |
+|---|---|
+| Lazer (`laser3`) | 82/82, osilgan uch 0 |
+| `mi` konturi (tile) | 3 711 → 3 821 (+3%) |
+| `mi` konturi (medalyon) | 75 |
+| Chok | `mi` to'rttala guruhda ham o'tdi |
+| Eng ko'p kontur | `gi tile` 19 550 (o'zgarmadi) |
